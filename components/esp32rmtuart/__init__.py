@@ -18,6 +18,9 @@ from esphome.core import CORE
 CONF_RMT_TX_CHANNEL = "rmt_tx_channel"
 CONF_RMT_RX_CHANNEL = "rmt_rx_channel"
 
+CONF_RMT_TX_SYMBOLS = "rmt_tx_symbols"
+CONF_RMT_RX_SYMBOLS = "rmt_rx_symbols"
+
 _LOGGER = logging.getLogger(__name__)
 
 # DEPENDENCIES = ["uart"]
@@ -66,8 +69,18 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_RMT_RX_CHANNEL): cv.All(
         not_with_new_rmt_driver, esp32_rmt.validate_rmt_channel(tx=False)
     ),
+    #TODO Calcualte how mutch symbols are needed for this
     OptionalForIDF5(
-                CONF_RMT_SYMBOLS,
+                CONF_RMT_TX_SYMBOLS,
+                esp32_idf=192,
+                esp32_s2_idf=192,
+                esp32_s3_idf=192,
+                esp32_c3_idf=96,
+                esp32_c6_idf=96,
+                esp32_h2_idf=96,
+            ): cv.All(only_with_new_rmt_driver, cv.int_range(min=2)),
+    OptionalForIDF5(
+                CONF_RMT_RX_SYMBOLS,
                 esp32_idf=192,
                 esp32_s2_idf=192,
                 esp32_s3_idf=192,
@@ -85,7 +98,8 @@ async def to_code(config):
     cg.add(var.set_rx_pin(config[CONF_RX_PIN]))
 
     if esp32_rmt.use_new_rmt_driver():
-        cg.add(var.set_rmt_symbols(config[CONF_RMT_SYMBOLS]))
+        cg.add(var.set_tx_rmt_symbols(config[CONF_RMT_TX_SYMBOLS]))
+        cg.add(var.set_rx_rmt_symbols(config[CONF_RMT_RX_SYMBOLS]))
     else:
         rmt_channel_t = cg.global_ns.enum("rmt_channel_t")
         cg.add(
