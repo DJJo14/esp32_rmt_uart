@@ -24,7 +24,7 @@ namespace esp32_rmt_uart {
 
 class RMTUARTComponent : public Component, public uart::UARTComponent {
  public:
-    RMTUARTComponent(UARTComponent *parent, int tx_pin, int rx_pin, int baud_rate = DEFAULT_BAUD_RATE);
+    RMTUARTComponent(int tx_pin, int rx_pin, int baud_rate = DEFAULT_BAUD_RATE);
     void setup() override;
     void loop() override;
     void write_byte(uint8_t byte) override;
@@ -38,9 +38,6 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     void set_tx_rmt_channel(rmt_channel_t channel) { this->tx_channel_ = channel; }
     void set_rx_rmt_channel(rmt_channel_t channel) { this->rx_channel_ = channel; }
 #endif
-
-   void set_tx_pin(uint8_t pin) { this->tx_gpio_ = pin; }
-   void set_rx_pin(uint8_t pin) { this->rx_gpio_ = pin; }
   //
   // we implements/overrides the virtual class from UARTComponent
   //
@@ -98,8 +95,8 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
   void flush() override;
 
  private:
-    int tx_gpio_;
-    int rx_gpio_;
+    int tx_pin_;
+    int tx_pin_;
     int baud_rate_;
 
 
@@ -107,12 +104,10 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     rmt_channel_handle_t channel_{nullptr};
     rmt_encoder_handle_t encoder_{nullptr};
     rmt_symbol_word_t *rmt_buf_{nullptr};
-    rmt_symbol_word_t bit0_, bit1_, reset_;
     uint32_t rmt_tx_symbols_;
     uint32_t rmt_rx_symbols_;
 #else
     rmt_item32_t *rmt_buf_{nullptr};
-    rmt_item32_t bit0_, bit1_, reset_;
     rmt_channel_t tx_channel_{RMT_CHANNEL_0};
     rmt_channel_t rx_channel_{RMT_CHANNEL_0};
 #endif

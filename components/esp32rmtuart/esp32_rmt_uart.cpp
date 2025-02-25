@@ -17,16 +17,16 @@ static const uint32_t RMT_CLK_FREQ = 32000000;
 static const uint8_t RMT_CLK_DIV = 1;
 #else
 static const uint32_t RMT_CLK_FREQ = 80000000;
-static const uint8_t RMT_CLK_DIV = 1;
+static const uint32_t RMT_CLK_DIV = 1;
 #endif
 #define CLOCK_HZ (RMT_CLK_FREQ/RMT_CLK_DIV)
 
-RMTUARTComponent::RMTUARTComponent(UARTComponent *parent, int tx_pin, int rx_pin, int baud_rate)
-    : UARTDevice(parent), tx_gpio_(tx_pin), rx_gpio_(rx_pin), baud_rate_(baud_rate),
+RMTUARTComponent::RMTUARTComponent(int tx_pin, int rx_pin, int baud_rate)
+    : tx_pin_(tx_pin), rx_pin_(rx_pin), baud_rate_(baud_rate),
       tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0) {}
 
 void RMTUARTComponent::setup() {
-    ESP_LOGCONFIG(TAG, "Setting up ESP32 Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_gpio_, rx_gpio_, baud_rate_);
+    ESP_LOGCONFIG(TAG, "Setting up ESP32 Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
 
 
 #if ESP_IDF_VERSION_MAJOR >= 5
@@ -39,7 +39,7 @@ void RMTUARTComponent::setup() {
     memset(&channel, 0, sizeof(channel));
     channel.clk_src = RMT_CLK_SRC_DEFAULT;
     channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
-    channel.gpio_num = gpio_num_t(this->tx_gpio_);
+    channel.gpio_num = gpio_num_t(this->tx_pin_);
     channel.mem_block_symbols = this->rmt_tx_symbols_;
     channel.trans_queue_depth = 1;
     channel.flags.io_loop_back = 0;
@@ -76,7 +76,7 @@ void RMTUARTComponent::setup() {
     memset(&config, 0, sizeof(config));
     config.channel = this->tx_channel_;
     config.rmt_mode = RMT_MODE_TX;
-    config.gpio_num = gpio_num_t(this->tx_gpio_);
+    config.gpio_num = gpio_num_t(this->tx_pin_);
     config.mem_block_num = 1;
     config.clk_div = RMT_CLK_DIV;
     config.tx_config.loop_en = false;
@@ -144,7 +144,7 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
     rx_tail_ = (rx_tail_ + 1) % UART_RX_BUFFER_SIZE;
 }
 
-void write_array(const uint8_t *buffer, size_t length)
+void RMTUARTComponent::write_array(const uint8_t *buffer, size_t length)
 {
     //TODO: Implement
     for (size_t i = 0; i < length; i++) {
@@ -152,7 +152,7 @@ void write_array(const uint8_t *buffer, size_t length)
     }
 }
 
-bool read_array(uint8_t *buffer, size_t length)
+bool RMTUARTComponent::read_array(uint8_t *buffer, size_t length)
 {
     //TODO: Implement
     for (size_t i = 0; i < length; i++) {
@@ -163,18 +163,18 @@ bool read_array(uint8_t *buffer, size_t length)
     return true;    
 }
 
-bool peek_byte(uint8_t *buffer)
+bool RMTUARTComponent::peek_byte(uint8_t *buffer)
 {
     //TODO: Implement
     return read_byte(buffer);
 }
 
-int available()
+int RMTUARTComponent::available()
 {
     return 0;
 }
 
-void flush()
+void RMTUARTComponent::flush()
 {
 
 }
