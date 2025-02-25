@@ -95,8 +95,6 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
   void flush() override;
 
  private:
-    int tx_pin_;
-    int tx_pin_;
     int baud_rate_;
 
 
