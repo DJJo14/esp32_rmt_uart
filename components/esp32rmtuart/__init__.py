@@ -23,9 +23,10 @@ CONF_RMT_RX_SYMBOLS = "rmt_rx_symbols"
 
 _LOGGER = logging.getLogger(__name__)
 
-# DEPENDENCIES = ["uart"]
-CODEOWNERS = ["@DJJo14"]
 DEPENDENCIES = ["esp32"]
+AUTO_LOAD = ["uart", "esp32_rmt"]
+
+CODEOWNERS = ["@DJJo14"]
 
 rmt_uart_ns = cg.esphome_ns.namespace("esp32_rmt_uart")
 RMTUARTComponent = rmt_uart_ns.class_("RMTUARTComponent", cg.Component, uart.UARTDevice)

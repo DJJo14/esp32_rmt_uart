@@ -1,6 +1,6 @@
 #include "esp32_rmt_uart.h"
 
-#ifdef USE_ESP32
+// #ifdef USE_ESP32
 
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
@@ -15,10 +15,9 @@ static const char *const TAG = "esp32_rmt_uart";
 #ifdef USE_ESP32_VARIANT_ESP32H2
 static const uint32_t RMT_CLK_FREQ = 32000000;
 static const uint8_t RMT_CLK_DIV = 1;
-
 #else
 static const uint32_t RMT_CLK_FREQ = 80000000;
-static const uint8_t RMT_CLK_DIV = 2;
+static const uint8_t RMT_CLK_DIV = 1;
 #endif
 #define CLOCK_HZ (RMT_CLK_FREQ/RMT_CLK_DIV)
 
@@ -97,28 +96,7 @@ void RMTUARTComponent::setup() {
       return;
     }
 #endif
-
-    // TX Configuration
-    rmt_tx_channel_config_t tx_config = {
-        .gpio_num = tx_gpio_,
-        .clk_src = RMT_CLK_SRC_APB,
-        .resolution_hz = CLOCK_HZ,
-        .mem_block_symbols = 64,
-        .trans_queue_depth = 4
-    };
-    rmt_new_tx_channel(&tx_config, &rmt_tx_channel_);
-    rmt_enable(rmt_tx_channel_);
-
-    // RX Configuration
-    rmt_rx_channel_config_t rx_config = {
-        .gpio_num = rx_gpio_,
-        .clk_src = RMT_CLK_SRC_APB,
-        .resolution_hz = CLOCK_HZ,
-        .mem_block_symbols = UART_RX_BUFFER_SIZE
-    };
-    rmt_new_rx_channel(&rx_config, &rmt_rx_channel_);
-    rmt_enable(rmt_rx_channel_);
-    rmt_receive(rmt_rx_channel_, rx_buffer_, UART_RX_BUFFER_SIZE, nullptr);
+    //TODO RX Configuration
 }
 
 void RMTUARTComponent::write_byte(uint8_t byte) {
@@ -166,8 +144,43 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
     rx_tail_ = (rx_tail_ + 1) % UART_RX_BUFFER_SIZE;
 }
 
+void write_array(const uint8_t *buffer, size_t length)
+{
+    //TODO: Implement
+    for (size_t i = 0; i < length; i++) {
+        write_byte(buffer[i]);
+    }
+}
+
+bool read_array(uint8_t *buffer, size_t length)
+{
+    //TODO: Implement
+    for (size_t i = 0; i < length; i++) {
+        if (!read_byte(&buffer[i])) {
+            return false;
+        }
+    }
+    return true;    
+}
+
+bool peek_byte(uint8_t *buffer)
+{
+    //TODO: Implement
+    return read_byte(buffer);
+}
+
+int available()
+{
+    return 0;
+}
+
+void flush()
+{
+
+}
+
 }  // namespace esp32_rmt_uart
 }  // namespace esphome
 
 
-#endif  // USE_ESP32
+// #endif  // USE_ESP32

@@ -13,11 +13,16 @@
 #include <driver/rmt.h>
 #endif
 
+namespace esphome {
+namespace esp32_rmt_uart {
+
 #define DEFAULT_BAUD_RATE 9600
 #define UART_TX_BUFFER_SIZE 256
 #define UART_RX_BUFFER_SIZE 256
 
-class RMTUARTComponent : public Component, public UARTComponent {
+//class RMTUARTComponent : public uart::UARTComponent{
+
+class RMTUARTComponent : public Component, public uart::UARTComponent {
  public:
     RMTUARTComponent(UARTComponent *parent, int tx_pin, int rx_pin, int baud_rate = DEFAULT_BAUD_RATE);
     void setup() override;
@@ -119,3 +124,7 @@ class RMTUARTComponent : public Component, public UARTComponent {
     void process_tx_queue();
     void decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count);
 };
+
+
+}  // namespace esp32_rmt_uart
+}  // namespace esphome
