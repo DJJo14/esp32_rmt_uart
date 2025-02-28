@@ -193,6 +193,13 @@ void RMTUARTComponent::flush() {
     }
 }
 
+void RMTUARTComponent::check_logger_conflict() {
+  // Check if the logger is using the same UART pins
+//   if (this->tx_pin_ == logger::global_logger->get_tx_pin() || this->rx_pin_ == logger::global_logger->get_rx_pin()) {
+//     ESP_LOGW(TAG, "Logger is using the same UART pins. This may cause conflicts.");
+//   }
+}
+
 }  // namespace esp32_rmt_uart
 }  // namespace esphome
 
