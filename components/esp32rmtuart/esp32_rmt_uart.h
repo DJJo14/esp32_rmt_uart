@@ -24,11 +24,11 @@ namespace esp32_rmt_uart {
 
 class RMTUARTComponent : public Component, public uart::UARTComponent {
  public:
-    RMTUARTComponent(int tx_pin, int rx_pin, int baud_rate = DEFAULT_BAUD_RATE);
+    RMTUARTComponent();
     void setup() override;
     void loop() override;
-    void write_byte(uint8_t byte) override;
-    bool read_byte(uint8_t *byte) override;
+    void write_byte(uint8_t byte);  // Removed 'override'
+    bool read_byte(uint8_t *byte);
     void set_baud_rate(int baud_rate) { baud_rate_ = baud_rate; }
 
 #if ESP_IDF_VERSION_MAJOR >= 5
@@ -38,6 +38,15 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     void set_tx_rmt_channel(rmt_channel_t channel) { this->tx_channel_ = channel; }
     void set_rx_rmt_channel(rmt_channel_t channel) { this->rx_channel_ = channel; }
 #endif
+
+
+  // Sets the TX (transmit) pin for the UART bus.
+  // @param tx_pin Pointer to the internal GPIO pin used for transmission.
+  void set_tx_pin(int tx_pin) { this->tx_pin_ = tx_pin; }
+
+  // Sets the RX (receive) pin for the UART bus.
+  // @param rx_pin Pointer to the internal GPIO pin used for reception.
+  void set_rx_pin(int rx_pin) { this->rx_pin_ = rx_pin; }
   //
   // we implements/overrides the virtual class from UARTComponent
   //
@@ -101,19 +110,27 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
 #if ESP_IDF_VERSION_MAJOR >= 5
     rmt_channel_handle_t channel_{nullptr};
     rmt_encoder_handle_t encoder_{nullptr};
-    rmt_symbol_word_t *rmt_buf_{nullptr};
+    rmt_symbol_word_t *rmt_tx_buf_{nullptr};
+    rmt_symbol_word_t *rmt_rx_buf_{nullptr};
     uint32_t rmt_tx_symbols_;
     uint32_t rmt_rx_symbols_;
 #else
-    rmt_item32_t *rmt_buf_{nullptr};
+    rmt_item32_t *rmt_tx_buf_{nullptr};
+    rmt_item32_t *rmt_rx_buf_{nullptr};
     rmt_channel_t tx_channel_{RMT_CHANNEL_0};
     rmt_channel_t rx_channel_{RMT_CHANNEL_0};
 #endif
+    uint8_t tx_pin_;
+    uint8_t rx_pin_;
+
 
     uint8_t tx_buffer_[UART_TX_BUFFER_SIZE];
     uint8_t rx_buffer_[UART_RX_BUFFER_SIZE];
+    uint32_t tx_buffer_size_ = UART_TX_BUFFER_SIZE;
+    uint32_t rx_buffer_size_ = UART_RX_BUFFER_SIZE;
     int tx_head_, tx_tail_;
     int rx_head_, rx_tail_;
+    bool use_psram_;
     void process_tx_queue();
     void decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count);
 };

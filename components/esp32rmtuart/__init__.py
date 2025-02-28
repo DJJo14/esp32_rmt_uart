@@ -94,9 +94,10 @@ CONFIG_SCHEMA = cv.Schema({
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
-
+    #, config[CONF_TX_PIN], config[CONF_RX_PIN], config[CONF_BAUD_RATE]
     cg.add(var.set_tx_pin(config[CONF_TX_PIN]))
     cg.add(var.set_rx_pin(config[CONF_RX_PIN]))
+    cg.add(var.set_baud_rate(config[CONF_BAUD_RATE]))  # Set baud rate
 
     if esp32_rmt.use_new_rmt_driver():
         cg.add(var.set_tx_rmt_symbols(config[CONF_RMT_TX_SYMBOLS]))
@@ -114,7 +115,7 @@ async def to_code(config):
             )
         )
 
-    cg.add(var.set_baud_rate(config[CONF_BAUD_RATE]))  # Set baud rate
+
 
 
     # yield cg.register_component(var, config)

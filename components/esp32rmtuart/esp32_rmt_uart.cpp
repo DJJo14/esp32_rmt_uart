@@ -1,4 +1,5 @@
 #include "esp32_rmt_uart.h"
+#include <cinttypes>
 
 // #ifdef USE_ESP32
 
@@ -21,9 +22,8 @@ static const uint32_t RMT_CLK_DIV = 1;
 #endif
 #define CLOCK_HZ (RMT_CLK_FREQ/RMT_CLK_DIV)
 
-RMTUARTComponent::RMTUARTComponent(int tx_pin, int rx_pin, int baud_rate)
-    : tx_pin_(tx_pin), rx_pin_(rx_pin), baud_rate_(baud_rate),
-      tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0) {}
+RMTUARTComponent::RMTUARTComponent()
+    : tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0), use_psram_(false) {}
 
 void RMTUARTComponent::setup() {
     ESP_LOGCONFIG(TAG, "Setting up ESP32 Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
@@ -33,7 +33,7 @@ void RMTUARTComponent::setup() {
     RAMAllocator<rmt_symbol_word_t> rmt_allocator(this->use_psram_ ? 0 : RAMAllocator<rmt_symbol_word_t>::ALLOC_INTERNAL);
   
     // 8 bits per byte, 1 rmt_symbol_word_t per bit + 1 rmt_symbol_word_t for reset
-    this->rmt_buf_ = rmt_allocator.allocate(buffer_size * 8 + 1);
+    this->rmt_tx_buf_ = rmt_allocator.allocate(tx_buffer_size_ * 8 + 1);
   
     rmt_tx_channel_config_t channel;
     memset(&channel, 0, sizeof(channel));
@@ -70,7 +70,7 @@ void RMTUARTComponent::setup() {
     RAMAllocator<rmt_item32_t> rmt_allocator(this->use_psram_ ? 0 : RAMAllocator<rmt_item32_t>::ALLOC_INTERNAL);
   
     // 8 bits per byte, 1 rmt_item32_t per bit + 1 rmt_item32_t for reset
-    this->rmt_buf_ = rmt_allocator.allocate(buffer_size * 8 + 1);
+    this->rmt_tx_buf_ = rmt_allocator.allocate(tx_buffer_size_ * 8 + 1);
   
     rmt_config_t config;
     memset(&config, 0, sizeof(config));
@@ -113,22 +113,40 @@ bool RMTUARTComponent::read_byte(uint8_t *byte) {
 }
 
 void RMTUARTComponent::process_tx_queue() {
+    esp_err_t error = 0;
     if (tx_head_ == tx_tail_) return;
 
     int length = (tx_tail_ - tx_head_ + UART_TX_BUFFER_SIZE) % UART_TX_BUFFER_SIZE;
-    rmt_symbol_word_t symbols[length * 10];
+    // rmt_symbol_word_t symbols[length * 10];
+    //TODO Fix this use the correct memory
+    rmt_symbol_word_t *symbols;
 
     for (int j = 0; j < length; j++) {
         uint8_t byte = tx_buffer_[tx_head_ + j];
-        symbols[j * 10] = { .duration0 = CLOCK_HZ / baud_rate_, .level0 = 0 }; // Start bit
+        symbols[j * 10] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = 0 }; // Start bit
         for (int i = 0; i < 8; i++) {
-            symbols[j * 10 + i + 1] = { .duration0 = CLOCK_HZ / baud_rate_, .level0 = (byte >> i) & 1 };
+            symbols[j * 10 + i + 1] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = (byte >> i) & 1 };
         }
-        symbols[j * 10 + 9] = { .duration0 = CLOCK_HZ / baud_rate_, .level0 = 1 }; // Stop bit
+        symbols[j * 10 + 9] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = 1 }; // Stop bit
     }
+#if ESP_IDF_VERSION_MAJOR >= 5
+    rmt_transmit_config_t config;
+    memset(&config, 0, sizeof(config));
+    config.loop_count = 0;
+    config.flags.eot_level = 0;
+    error = rmt_transmit(this->channel_, this->encoder_, this->rmt_tx_buf_, length * 10 * sizeof(rmt_symbol_word_t), &config);
 
+    if (error != ESP_OK)
+    {
+        ESP_LOGE(TAG, "RMT TX error");
+        this->status_set_warning();
+        return;
+    }
+    // this->status_clear_warning();
+#else
     rmt_transmit_config_t tx_config = { .loop_count = 0 };
     rmt_transmit(rmt_tx_channel_, NULL, symbols, length * 10, &tx_config);
+#endif
 
     tx_head_ = (tx_head_ + length) % UART_TX_BUFFER_SIZE;
 }
@@ -144,43 +162,38 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
     rx_tail_ = (rx_tail_ + 1) % UART_RX_BUFFER_SIZE;
 }
 
-void RMTUARTComponent::write_array(const uint8_t *buffer, size_t length)
-{
-    //TODO: Implement
+void RMTUARTComponent::write_array(const uint8_t *buffer, size_t length) {
     for (size_t i = 0; i < length; i++) {
         write_byte(buffer[i]);
     }
 }
 
-bool RMTUARTComponent::read_array(uint8_t *buffer, size_t length)
-{
-    //TODO: Implement
+bool RMTUARTComponent::read_array(uint8_t *buffer, size_t length) {
     for (size_t i = 0; i < length; i++) {
         if (!read_byte(&buffer[i])) {
             return false;
         }
     }
-    return true;    
+    return true;
 }
 
-bool RMTUARTComponent::peek_byte(uint8_t *buffer)
-{
-    //TODO: Implement
-    return read_byte(buffer);
+bool RMTUARTComponent::peek_byte(uint8_t *buffer) {
+    if (rx_head_ == rx_tail_) return false;
+    *buffer = rx_buffer_[rx_head_];
+    return true;
 }
 
-int RMTUARTComponent::available()
-{
-    return 0;
+int RMTUARTComponent::available() {
+    return (rx_tail_ - rx_head_ + UART_RX_BUFFER_SIZE) % UART_RX_BUFFER_SIZE;
 }
 
-void RMTUARTComponent::flush()
-{
-
+void RMTUARTComponent::flush() {
+    while (tx_head_ != tx_tail_) {
+        process_tx_queue();
+    }
 }
 
 }  // namespace esp32_rmt_uart
 }  // namespace esphome
-
 
 // #endif  // USE_ESP32
