@@ -193,6 +193,11 @@ void RMTUARTComponent::flush() {
     }
 }
 
+void RMTUARTComponent::loop()
+{
+    
+}
+
 void RMTUARTComponent::check_logger_conflict() {
   // Check if the logger is using the same UART pins
 //   if (this->tx_pin_ == logger::global_logger->get_tx_pin() || this->rx_pin_ == logger::global_logger->get_rx_pin()) {
