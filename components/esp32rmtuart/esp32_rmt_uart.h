@@ -26,6 +26,7 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
  public:
     RMTUARTComponent();
     void setup() override;
+    void setup2();
     void loop() override;
     void write_byte(uint8_t byte);  // Removed 'override'
     bool read_byte(uint8_t *byte);

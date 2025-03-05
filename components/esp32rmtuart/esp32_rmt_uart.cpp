@@ -25,8 +25,12 @@ static const uint32_t RMT_CLK_DIV = 1;
 RMTUARTComponent::RMTUARTComponent()
     : tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0), use_psram_(false) {}
 
+void RMTUARTComponent::setup2() {
+        ESP_LOGCONFIG(TAG, "Setting up ESP32 Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
+    }
+
 void RMTUARTComponent::setup() {
-    ESP_LOGCONFIG(TAG, "Setting up ESP32 Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
+    ESP_LOGCONFIG(TAG, "Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
 
 
 #if ESP_IDF_VERSION_MAJOR >= 5
@@ -117,24 +121,31 @@ void RMTUARTComponent::process_tx_queue() {
     if (tx_head_ == tx_tail_) return;
 
     int length = (tx_tail_ - tx_head_ + UART_TX_BUFFER_SIZE) % UART_TX_BUFFER_SIZE;
+    length = 1;
     // rmt_symbol_word_t symbols[length * 10];
+    if( this->rmt_tx_buf_ == nullptr) {
+        ESP_LOGE(TAG, "RMT TX buffer is null");
+        return;
+    }
     //TODO Fix this use the correct memory
-    rmt_symbol_word_t *symbols;
+    rmt_symbol_word_t *symbols = this->rmt_tx_buf_;
+    uint8_t byte;
 
     for (int j = 0; j < length; j++) {
-        uint8_t byte = tx_buffer_[tx_head_ + j];
+        byte = 0x55; //tx_buffer_[tx_head_ + j];
         symbols[j * 10] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = 0 }; // Start bit
         for (int i = 0; i < 8; i++) {
-            symbols[j * 10 + i + 1] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = (byte >> i) & 1 };
+            symbols[j * 10 + i + 1] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = (uint16_t) (byte >> i) & 1 };
         }
         symbols[j * 10 + 9] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = 1 }; // Stop bit
     }
+    ESP_LOGCONFIG(TAG, "send %d bytes byte: %d", length, byte);
 #if ESP_IDF_VERSION_MAJOR >= 5
     rmt_transmit_config_t config;
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
     config.flags.eot_level = 0;
-    error = rmt_transmit(this->channel_, this->encoder_, this->rmt_tx_buf_, length * 10 * sizeof(rmt_symbol_word_t), &config);
+    error = rmt_transmit(this->channel_, this->encoder_, symbols, length * 10 * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
     {
@@ -142,8 +153,9 @@ void RMTUARTComponent::process_tx_queue() {
         this->status_set_warning();
         return;
     }
-    // this->status_clear_warning();
+    this->status_clear_warning();
 #else
+    fd
     rmt_transmit_config_t tx_config = { .loop_count = 0 };
     rmt_transmit(rmt_tx_channel_, NULL, symbols, length * 10, &tx_config);
 #endif
