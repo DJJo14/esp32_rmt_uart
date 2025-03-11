@@ -86,7 +86,7 @@ void RMTUARTComponent::setup() {
     config.tx_config.loop_en = false;
     config.tx_config.carrier_level = RMT_CARRIER_LEVEL_LOW;
     config.tx_config.carrier_en = false;
-    config.tx_config.idle_level = RMT_IDLE_LEVEL_LOW;
+    config.tx_config.idle_level = RMT_IDLE_LEVEL_HIGH;
     config.tx_config.idle_output_en = true;
   
     if (rmt_config(&config) != ESP_OK) {
