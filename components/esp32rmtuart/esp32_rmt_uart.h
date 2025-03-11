@@ -17,6 +17,7 @@ namespace esphome {
 namespace esp32_rmt_uart {
 
 #define DEFAULT_BAUD_RATE 9600
+#define RMT_TX_SYMBOLS_PER_BYTE 5
 #define UART_TX_BUFFER_SIZE 256
 #define UART_RX_BUFFER_SIZE 256
 

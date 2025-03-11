@@ -121,31 +121,49 @@ void RMTUARTComponent::process_tx_queue() {
     if (tx_head_ == tx_tail_) return;
 
     int length = (tx_tail_ - tx_head_ + UART_TX_BUFFER_SIZE) % UART_TX_BUFFER_SIZE;
-    length = 1;
     // rmt_symbol_word_t symbols[length * 10];
     if( this->rmt_tx_buf_ == nullptr) {
         ESP_LOGE(TAG, "RMT TX buffer is null");
         return;
     }
-    //TODO Fix this use the correct memory
+    
+    if (rmt_tx_symbols_ < length * RMT_TX_SYMBOLS_PER_BYTE)
+    {
+        length = rmt_tx_symbols_ / RMT_TX_SYMBOLS_PER_BYTE;
+    }
+
     rmt_symbol_word_t *symbols = this->rmt_tx_buf_;
     uint8_t byte;
 
     for (int j = 0; j < length; j++) {
-        byte = 0x55; //tx_buffer_[tx_head_ + j];
-        symbols[j * 10] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = 0 }; // Start bit
-        for (int i = 0; i < 8; i++) {
-            symbols[j * 10 + i + 1] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = (uint16_t) (byte >> i) & 1 };
+        byte = tx_buffer_[tx_head_ + j];
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].val = 0;
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].duration0 = (uint16_t) (CLOCK_HZ / baud_rate_);
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].level0 = 0; // Start bit
+        // ESP_LOGD(TAG, "symbol %d bit: %02x", (j * RMT_TX_SYMBOLS_PER_BYTE),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE].val);
+        for (int i = 0; i < 4; i++)
+        {
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].duration1 = (uint16_t) (CLOCK_HZ / baud_rate_);
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level1 = (uint16_t) (byte >> (i*2)) & 1;
+            ESP_LOGD(TAG, "symbol %d bit: %02x %d %d", (j * RMT_TX_SYMBOLS_PER_BYTE + i),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].val, symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level0, symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level1);
+
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].val = 0;
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].duration0 = (uint16_t) (CLOCK_HZ / baud_rate_);
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].level0 = (uint16_t) (byte >> (i*2+1)) & 1;
+            // ESP_LOGD(TAG, "symbol %d bit: %02x", (j * RMT_TX_SYMBOLS_PER_BYTE + i + 1),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].val);
         }
-        symbols[j * 10 + 9] = { .duration0 = (uint16_t) (CLOCK_HZ / baud_rate_), .level0 = 1 }; // Stop bit
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE -1].duration1 = (uint16_t) (CLOCK_HZ / baud_rate_);
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE -1].level1 = 1; // Stop bit
+        ESP_LOGD(TAG, "symbol %d bit: %02x %d %d", (j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1].val, symbols[j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1].level0, symbols[j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1].level1);
+        ESP_LOGCONFIG(TAG, "send %d bytes byte: %d %c", length, byte, byte);
     }
-    ESP_LOGCONFIG(TAG, "send %d bytes byte: %d", length, byte);
+    
 #if ESP_IDF_VERSION_MAJOR >= 5
     rmt_transmit_config_t config;
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
     config.flags.eot_level = 0;
-    error = rmt_transmit(this->channel_, this->encoder_, symbols, length * 10 * sizeof(rmt_symbol_word_t), &config);
+    error = rmt_transmit(this->channel_, this->encoder_, symbols, length * RMT_TX_SYMBOLS_PER_BYTE * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
     {
@@ -155,7 +173,6 @@ void RMTUARTComponent::process_tx_queue() {
     }
     this->status_clear_warning();
 #else
-    fd
     rmt_transmit_config_t tx_config = { .loop_count = 0 };
     rmt_transmit(rmt_tx_channel_, NULL, symbols, length * 10, &tx_config);
 #endif
