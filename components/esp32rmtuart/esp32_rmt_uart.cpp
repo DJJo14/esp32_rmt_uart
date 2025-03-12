@@ -162,7 +162,7 @@ void RMTUARTComponent::process_tx_queue() {
     rmt_transmit_config_t config;
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
-    config.flags.eot_level = 0;
+    config.flags.eot_level = 1;
     error = rmt_transmit(this->channel_, this->encoder_, symbols, length * RMT_TX_SYMBOLS_PER_BYTE * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
