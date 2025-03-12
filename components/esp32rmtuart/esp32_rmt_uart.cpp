@@ -165,7 +165,7 @@ void RMTUARTComponent::process_tx_queue() {
     uint8_t byte;
 
     for (int j = 0; j < length; j++) {
-        byte = tx_buffer_[tx_head_ + j];
+        byte = tx_buffer_[(tx_head_ + j) % UART_TX_BUFFER_SIZE];
         symbols[j * RMT_TX_SYMBOLS_PER_BYTE].val = 0;
         symbols[j * RMT_TX_SYMBOLS_PER_BYTE].duration0 = this->baud_rate_timing_array_[0];
         symbols[j * RMT_TX_SYMBOLS_PER_BYTE].level0 = 0; // Start bit
