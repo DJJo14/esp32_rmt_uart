@@ -214,9 +214,18 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
 }
 
 void RMTUARTComponent::write_array(const uint8_t *buffer, size_t length) {
-    for (size_t i = 0; i < length; i++) {
-        write_byte(buffer[i]);
+    size_t available_space = UART_TX_BUFFER_SIZE - ((tx_tail_ - tx_head_ + UART_TX_BUFFER_SIZE) % UART_TX_BUFFER_SIZE);
+    if (length > available_space) {
+        ESP_LOGE(TAG, "Not enough space in TX buffer");
+        return;
     }
+
+    size_t first_chunk = (length < (UART_TX_BUFFER_SIZE - tx_tail_)) ? length : (UART_TX_BUFFER_SIZE - tx_tail_);
+    memcpy(&tx_buffer_[tx_tail_], buffer, first_chunk);
+    memcpy(&tx_buffer_[0], buffer + first_chunk, length - first_chunk);
+
+    tx_tail_ = (tx_tail_ + length) % UART_TX_BUFFER_SIZE;
+    process_tx_queue();
 }
 
 bool RMTUARTComponent::read_array(uint8_t *buffer, size_t length) {
