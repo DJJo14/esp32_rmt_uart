@@ -29,7 +29,7 @@ AUTO_LOAD = ["uart", "esp32_rmt"]
 CODEOWNERS = ["@DJJo14"]
 
 rmt_uart_ns = cg.esphome_ns.namespace("esp32_rmt_uart")
-RMTUARTComponent = rmt_uart_ns.class_("RMTUARTComponent", cg.Component, uart.UARTDevice)
+RMTUARTComponent = rmt_uart_ns.class_("RMTUARTComponent", cg.Component,uart.UARTComponent)
 
 
 

@@ -25,10 +25,6 @@ static const uint32_t RMT_CLK_DIV = 1;
 RMTUARTComponent::RMTUARTComponent()
     : tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0), use_psram_(false) {}
 
-void RMTUARTComponent::setup2() {
-        ESP_LOGCONFIG(TAG, "Setting up ESP32 Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
-    }
-
 void RMTUARTComponent::setup() {
     ESP_LOGCONFIG(TAG, "Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
 
@@ -92,7 +88,7 @@ void RMTUARTComponent::setup() {
     if (rmt_config(&config) != ESP_OK) {
       ESP_LOGE(TAG, "Cannot initialize RMT!");
       this->mark_failed();
-      return;
+      return;   
     }
     if (rmt_driver_install(config.channel, 0, 0) != ESP_OK) {
       ESP_LOGE(TAG, "Cannot install RMT driver!");
