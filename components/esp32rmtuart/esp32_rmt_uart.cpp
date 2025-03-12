@@ -129,6 +129,11 @@ void RMTUARTComponent::setup() {
     //TODO RX Configuration
 }
 
+void RMTUARTComponent::set_baud_rate(int baud_rate) {
+    this->baud_rate_ = baud_rate;
+    this->generate_baud_rate_timing_array();
+}
+
 void RMTUARTComponent::write_byte(uint8_t byte) {
     tx_buffer_[tx_tail_] = byte;
     tx_tail_ = (tx_tail_ + 1) % UART_TX_BUFFER_SIZE;
