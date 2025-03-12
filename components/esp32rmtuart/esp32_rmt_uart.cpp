@@ -66,6 +66,28 @@ void RMTUARTComponent::setup() {
       this->mark_failed();
       return;
     }
+
+
+    //we need to send a start bit, for the end of transmission level to be correct
+    rmt_symbol_word_t *symbols = this->rmt_tx_buf_;
+    symbols[0].val = 0;
+    symbols[0].duration0 = (uint16_t) 1;
+    symbols[0].level0 = 1; // Start bit
+    symbols[0].duration1 = (uint16_t) 1;
+    symbols[0].level1 = 1; // Start bit
+    
+    rmt_transmit_config_t config;
+    memset(&config, 0, sizeof(config));
+    config.loop_count = 0;
+    config.flags.eot_level = 1;
+    esp_err_t error = rmt_transmit(this->channel_, this->encoder_, symbols, 1 * sizeof(rmt_symbol_word_t), &config);
+
+    if (error != ESP_OK)
+    {
+        ESP_LOGE(TAG, "RMT TX error");
+        this->status_set_warning();
+        return;
+    }
 #else
     RAMAllocator<rmt_item32_t> rmt_allocator(this->use_psram_ ? 0 : RAMAllocator<rmt_item32_t>::ALLOC_INTERNAL);
   
