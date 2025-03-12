@@ -106,6 +106,8 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
 
   void check_logger_conflict() override;
 
+  void generate_baud_rate_timing_array();
+
  private:
     int baud_rate_;
 
@@ -136,6 +138,7 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     bool use_psram_;
     void process_tx_queue();
     void decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count);
+    uint16_t baud_rate_timing_array_[10];
 };
 
 

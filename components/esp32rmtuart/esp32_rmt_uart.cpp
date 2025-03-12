@@ -25,9 +25,17 @@ static const uint32_t RMT_CLK_DIV = 1;
 RMTUARTComponent::RMTUARTComponent()
     : tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0), use_psram_(false) {}
 
+void RMTUARTComponent::generate_baud_rate_timing_array() {
+    uint32_t base_timing = CLOCK_HZ / this->baud_rate_;
+    for (int i = 0; i < 10; i++) {
+        this->baud_rate_timing_array_[i] = base_timing + ((i < (CLOCK_HZ % this->baud_rate_)) ? 1 : 0);
+    }
+}
+
 void RMTUARTComponent::setup() {
     ESP_LOGCONFIG(TAG, "Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
 
+    this->generate_baud_rate_timing_array();
 
 #if ESP_IDF_VERSION_MAJOR >= 5
     RAMAllocator<rmt_symbol_word_t> rmt_allocator(this->use_psram_ ? 0 : RAMAllocator<rmt_symbol_word_t>::ALLOC_INTERNAL);
@@ -139,14 +147,12 @@ void RMTUARTComponent::process_tx_queue() {
     if (tx_head_ == tx_tail_) return;
 
     int length = (tx_tail_ - tx_head_ + UART_TX_BUFFER_SIZE) % UART_TX_BUFFER_SIZE;
-    // rmt_symbol_word_t symbols[length * 10];
-    if( this->rmt_tx_buf_ == nullptr) {
+    if (this->rmt_tx_buf_ == nullptr) {
         ESP_LOGE(TAG, "RMT TX buffer is null");
         return;
     }
     
-    if (rmt_tx_symbols_ < length * RMT_TX_SYMBOLS_PER_BYTE)
-    {
+    if (rmt_tx_symbols_ < length * RMT_TX_SYMBOLS_PER_BYTE) {
         length = rmt_tx_symbols_ / RMT_TX_SYMBOLS_PER_BYTE;
     }
 
@@ -156,24 +162,17 @@ void RMTUARTComponent::process_tx_queue() {
     for (int j = 0; j < length; j++) {
         byte = tx_buffer_[tx_head_ + j];
         symbols[j * RMT_TX_SYMBOLS_PER_BYTE].val = 0;
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].duration0 = (uint16_t) (CLOCK_HZ / baud_rate_);
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].duration0 = this->baud_rate_timing_array_[0];
         symbols[j * RMT_TX_SYMBOLS_PER_BYTE].level0 = 0; // Start bit
-        // ESP_LOGD(TAG, "symbol %d bit: %02x", (j * RMT_TX_SYMBOLS_PER_BYTE),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE].val);
-        for (int i = 0; i < 4; i++)
-        {
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].duration1 = (uint16_t) (CLOCK_HZ / baud_rate_);
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level1 = (uint16_t) (byte >> (i*2)) & 1;
-            ESP_LOGD(TAG, "symbol %d bit: %02x %d %d", (j * RMT_TX_SYMBOLS_PER_BYTE + i),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].val, symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level0, symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level1);
-
+        for (int i = 0; i < 4; i++) {
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].duration1 = this->baud_rate_timing_array_[i + 1];
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level1 = (byte >> (i * 2)) & 1;
             symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].val = 0;
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].duration0 = (uint16_t) (CLOCK_HZ / baud_rate_);
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].level0 = (uint16_t) (byte >> (i*2+1)) & 1;
-            // ESP_LOGD(TAG, "symbol %d bit: %02x", (j * RMT_TX_SYMBOLS_PER_BYTE + i + 1),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].val);
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].duration0 = this->baud_rate_timing_array_[i + 1];
+            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].level0 = (byte >> (i * 2 + 1)) & 1;
         }
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE -1].duration1 = (uint16_t) (CLOCK_HZ / baud_rate_);
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE -1].level1 = 1; // Stop bit
-        ESP_LOGD(TAG, "symbol %d bit: %02x %d %d", (j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1),  symbols[j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1].val, symbols[j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1].level0, symbols[j * RMT_TX_SYMBOLS_PER_BYTE +RMT_TX_SYMBOLS_PER_BYTE -1].level1);
-        ESP_LOGCONFIG(TAG, "send %d bytes byte: %d %c", length, byte, byte);
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE - 1].duration1 = this->baud_rate_timing_array_[9];
+        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE - 1].level1 = 1; // Stop bit
     }
     
 #if ESP_IDF_VERSION_MAJOR >= 5
