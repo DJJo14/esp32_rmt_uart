@@ -31,6 +31,7 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     void write_byte(uint8_t byte);  // Removed 'override'
     bool read_byte(uint8_t *byte);
     void set_baud_rate(int baud_rate);
+    void load_settings();
 
 #if ESP_IDF_VERSION_MAJOR >= 5
     void set_tx_rmt_symbols(uint32_t rmt_symbols) { this->rmt_tx_symbols_ = rmt_symbols; }

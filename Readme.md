@@ -10,9 +10,13 @@ Todo list:
 - [x] The tx part works!, tested with the list of baudrates
 - [ ] The rx part 
 - [ ] make sure you can have multiple of then
+- [ ] turn one of the pins off
+- [ ] rx_buffer_size 
+- [ ] data_bits 
+- [ ] parity 
 - [ ] test with multiple at the same time
 - [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol)
-- [ ] check if this works with modbus
+- [ ] check if this works with modbus or other components
 - [ ] create a correct flush function
 
 

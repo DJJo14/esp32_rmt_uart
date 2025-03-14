@@ -25,17 +25,21 @@ static const uint32_t RMT_CLK_DIV = 1;
 RMTUARTComponent::RMTUARTComponent()
     : tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0), use_psram_(false) {}
 
-void RMTUARTComponent::generate_baud_rate_timing_array() {
+void RMTUARTComponent::load_settings() {
+    //Generate baud rate timing array
     uint32_t base_timing = CLOCK_HZ / this->baud_rate_;
+    uint32_t rest = (CLOCK_HZ % this->baud_rate_) / (this->baud_rate_/ 10);
     for (int i = 0; i < 10; i++) {
-        this->baud_rate_timing_array_[i] = base_timing + ((i < (CLOCK_HZ % this->baud_rate_)) ? 1 : 0);
+        this->baud_rate_timing_array_[i] = base_timing + ((i < rest) ? 1 : 0);
+    }
+
+    if (this->stop_bits_ == 2) {
+        this->baud_rate_timing_array_[9] = this->baud_rate_timing_array_[9] * 2;
     }
 }
 
 void RMTUARTComponent::setup() {
     ESP_LOGCONFIG(TAG, "Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
-
-    this->generate_baud_rate_timing_array();
 
 #if ESP_IDF_VERSION_MAJOR >= 5
     RAMAllocator<rmt_symbol_word_t> rmt_allocator(this->use_psram_ ? 0 : RAMAllocator<rmt_symbol_word_t>::ALLOC_INTERNAL);
@@ -127,11 +131,13 @@ void RMTUARTComponent::setup() {
     }
 #endif
     //TODO RX Configuration
+
+    this->load_settings();
 }
 
 void RMTUARTComponent::set_baud_rate(int baud_rate) {
     this->baud_rate_ = baud_rate;
-    this->generate_baud_rate_timing_array();
+    this->load_settings();
 }
 
 void RMTUARTComponent::write_byte(uint8_t byte) {
