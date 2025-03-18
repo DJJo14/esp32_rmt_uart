@@ -6,6 +6,8 @@
 
 #include <esp_idf_version.h>
 
+#include <cinttypes>
+
 #if ESP_IDF_VERSION_MAJOR >= 5
 #include <driver/rmt_tx.h>
 #include <driver/rmt_rx.h>
@@ -35,7 +37,13 @@ struct ReceiverComponentStore {
   esp_err_t error{ESP_OK};
   rmt_receive_config_t config;
 };
+
+typedef struct  {
+    uint16_t duration0 : 15; /*!< Duration of level0 */
+    uint16_t level0 : 1;     /*!< Level of the first part */
+} rmt_symbol_half_word_t;
 #endif
+
 
 class RMTUARTComponent : public Component, public uart::UARTComponent {
  public:
@@ -128,16 +136,19 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
   void generate_baud_rate_timing_array();
 
  private:
-    int baud_rate_;
-    RemoteReceiverComponentStore store_;
+    uint32_t baud_rate_;
+    ReceiverComponentStore store_;
 
 #if ESP_IDF_VERSION_MAJOR >= 5
-    rmt_channel_handle_t channel_{nullptr};
+    rmt_channel_handle_t tx_channel_{nullptr};
+    rmt_channel_handle_t rx_channel_{nullptr};
     rmt_encoder_handle_t encoder_{nullptr};
     rmt_symbol_word_t *rmt_tx_buf_{nullptr};
     rmt_symbol_word_t *rmt_rx_buf_{nullptr};
     uint32_t rmt_tx_symbols_;
     uint32_t rmt_rx_symbols_;
+    esp_err_t error_code_{ESP_OK};
+    std::string error_string_{""};
 #else
     rmt_item32_t *rmt_tx_buf_{nullptr};
     rmt_item32_t *rmt_rx_buf_{nullptr};

@@ -5,7 +5,9 @@
 
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
+#include <driver/gpio.h>
 
+#include <algorithm>
 #include <esp_attr.h>
 
 namespace esphome {
@@ -72,19 +74,19 @@ void RMTUARTComponent::setup() {
     // 8 bits per byte, 1 rmt_symbol_word_t per bit + 1 rmt_symbol_word_t for reset
     this->rmt_tx_buf_ = rmt_allocator.allocate(tx_buffer_size_ * 8 + 1);
   
-    rmt_tx_channel_config_t channel;
-    memset(&channel, 0, sizeof(channel));
-    channel.clk_src = RMT_CLK_SRC_DEFAULT;
-    channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
-    channel.gpio_num = gpio_num_t(this->tx_pin_);
-    channel.mem_block_symbols = this->rmt_tx_symbols_;
-    channel.trans_queue_depth = 1;
-    channel.flags.io_loop_back = 0;
-    channel.flags.io_od_mode = 0;
-    channel.flags.invert_out = 0;
-    channel.flags.with_dma = 0;
-    channel.intr_priority = 0;
-    if (rmt_new_tx_channel(&channel, &this->channel_) != ESP_OK) {
+    rmt_tx_channel_config_t tx_channel;
+    memset(&tx_channel, 0, sizeof(tx_channel));
+    tx_channel.clk_src = RMT_CLK_SRC_DEFAULT;
+    tx_channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
+    tx_channel.gpio_num = gpio_num_t(this->tx_pin_);
+    tx_channel.mem_block_symbols = this->rmt_tx_symbols_;
+    tx_channel.trans_queue_depth = 1;
+    tx_channel.flags.io_loop_back = 0;
+    tx_channel.flags.io_od_mode = 0;
+    tx_channel.flags.invert_out = 0;
+    tx_channel.flags.with_dma = 0;
+    tx_channel.intr_priority = 0;
+    if (rmt_new_tx_channel(&tx_channel, &this->tx_channel_) != ESP_OK) {
       ESP_LOGE(TAG, "Channel creation failed");
       this->mark_failed();
       return;
@@ -98,8 +100,8 @@ void RMTUARTComponent::setup() {
       return;
     }
   
-    if (rmt_enable(this->channel_) != ESP_OK) {
-      ESP_LOGE(TAG, "Enabling channel failed");
+    if (rmt_enable(this->tx_channel_) != ESP_OK) {
+      ESP_LOGE(TAG, "Enabling tx_channel_ failed");
       this->mark_failed();
       return;
     }
@@ -117,7 +119,7 @@ void RMTUARTComponent::setup() {
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
     config.flags.eot_level = 1;
-    esp_err_t error = rmt_transmit(this->channel_, this->encoder_, symbols, 1 * sizeof(rmt_symbol_word_t), &config);
+    esp_err_t error = rmt_transmit(this->tx_channel_, this->encoder_, symbols, 1 * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
     {
@@ -128,17 +130,17 @@ void RMTUARTComponent::setup() {
     
     // RX Configuration
 
-    rmt_rx_channel_config_t channel;
-    memset(&channel, 0, sizeof(channel));
-    channel.clk_src = RMT_CLK_SRC_DEFAULT;
-    channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
-    channel.mem_block_symbols = this->rmt_rx_symbols_;
-    channel.gpio_num = gpio_num_t(this->rx_pin_);
-    channel.intr_priority = 0;
-    channel.flags.invert_in = 0;
-    channel.flags.with_dma = 0;
-    channel.flags.io_loop_back = 0;
-    esp_err_t error = rmt_new_rx_channel(&channel, &this->channel_);
+    rmt_rx_channel_config_t rx_channel;
+    memset(&rx_channel, 0, sizeof(rx_channel));
+    rx_channel.clk_src = RMT_CLK_SRC_DEFAULT;
+    rx_channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
+    rx_channel.mem_block_symbols = this->rmt_rx_symbols_;
+    rx_channel.gpio_num = gpio_num_t(this->rx_pin_);
+    rx_channel.intr_priority = 0;
+    rx_channel.flags.invert_in = 0;
+    rx_channel.flags.with_dma = 0;
+    rx_channel.flags.io_loop_back = 0;
+    error = rmt_new_rx_channel(&rx_channel, &this->rx_channel_);
     if (error != ESP_OK) {
         this->error_code_ = error;
         if (error == ESP_ERR_NOT_FOUND) {
@@ -157,7 +159,7 @@ void RMTUARTComponent::setup() {
     // } else {
     //     gpio_pullup_dis(gpio_num_t(this->pin_->get_pin()));
     // }
-    error = rmt_enable(this->channel_);
+    error = rmt_enable(this->rx_channel_);
     if (error != ESP_OK) {
         this->error_code_ = error;
         this->error_string_ = "in rmt_enable";
@@ -168,7 +170,7 @@ void RMTUARTComponent::setup() {
     rmt_rx_event_callbacks_t callbacks;
     memset(&callbacks, 0, sizeof(callbacks));
     callbacks.on_recv_done = rmt_callback;
-    error = rmt_rx_register_event_callbacks(this->channel_, &callbacks, &this->store_);
+    error = rmt_rx_register_event_callbacks(this->rx_channel_, &callbacks, &this->store_);
     if (error != ESP_OK) {
         this->error_code_ = error;
         this->error_string_ = "in rmt_rx_register_event_callbacks";
@@ -181,12 +183,12 @@ void RMTUARTComponent::setup() {
     uint32_t max_filter_ns = 255u * 1000 / (RMT_CLK_FREQ / 1000000);
     uint32_t max_idle_ns = 65535u * 1000;
     memset(&this->store_.config, 0, sizeof(this->store_.config));
-    this->store_.config.signal_range_min_ns = std::min(/* 90% of baud_rate*/9000000000u/(this->baud_rate_), max_filter_ns);
+    this->store_.config.signal_range_min_ns = std::min(((uint32_t)/* 90% of baud_rate*/9000000000u/(this->baud_rate_)), max_filter_ns);
     this->store_.config.signal_range_max_ns = std::min(1000000000u/(this->baud_rate_/10), max_idle_ns);
     this->store_.receive_size = this->rmt_rx_symbols_ * sizeof(rmt_symbol_word_t);
     this->store_.buffer_size = std::max((event_size + this->store_.receive_size) * 2, this->rx_buffer_size_);
     this->store_.buffer = new uint8_t[this->rx_buffer_size_];
-    error = rmt_receive(this->channel_, (uint8_t *) this->store_.buffer + event_size, this->store_.receive_size,
+    error = rmt_receive(this->rx_channel_, (uint8_t *) this->store_.buffer + event_size, this->store_.receive_size,
                         &this->store_.config);
     if (error != ESP_OK) {
         this->error_code_ = error;
@@ -232,7 +234,7 @@ void RMTUARTComponent::setup() {
 }
 
 void RMTUARTComponent::set_baud_rate(int baud_rate) {
-    this->baud_rate_ = baud_rate;
+    this->baud_rate_ = (uint32_t) baud_rate;
     this->load_settings();
 }
 
@@ -287,7 +289,7 @@ void RMTUARTComponent::process_tx_queue() {
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
     config.flags.eot_level = 1;
-    error = rmt_transmit(this->channel_, this->encoder_, symbols, length * RMT_TX_SYMBOLS_PER_BYTE * sizeof(rmt_symbol_word_t), &config);
+    error = rmt_transmit(this->tx_channel_, this->encoder_, symbols, length * RMT_TX_SYMBOLS_PER_BYTE * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
     {
@@ -310,10 +312,53 @@ void RMTUARTComponent::put_rx_byte(uint8_t byte) {
 }
 
 void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count) {
+    uint32_t min_time_bit = this->baud_rate_timing_array_[0] * 9 / 10;
+    ESP_LOGD(TAG, "bit time %d", min_time_bit);
     uint8_t received_byte = 0;
-    for (int i = 0; i < count; i++) {
-        ESP_LOGD(TAG, "reviced byte: %d, time %d", symbols[i].level0, symbols[i].duration0);
-        ESP_LOGD(TAG, "reviced byte: %d, time %d", symbols[i].level1, symbols[i].duration1);
+    uint8_t recived_bits = 0;
+    uint32_t total_recived_bits = 0;
+    rmt_symbol_half_word_t *half_symbols = (rmt_symbol_half_word_t *) symbols;
+    uint32_t count_half = count * 2;
+
+    for (int i = 0; i < count_half; i++) {
+        if (half_symbols[i].duration0 == 0) {
+            //this is the last bit, before idle
+            recived_bits = 1;
+        }
+        else
+        {
+            recived_bits = half_symbols[i].duration0 / min_time_bit;
+        }
+        
+        ESP_LOGD(TAG, "reviced biit: %d, time %d, bits %d total %d", half_symbols[i].level0, half_symbols[i].duration0, recived_bits, total_recived_bits);
+
+        if(total_recived_bits == 0 && (half_symbols[i].level0 != 0)) {
+            ESP_LOGD(TAG, "Start bit not found");
+            continue;
+        } 
+
+        // if(total_recived_bits == 0 && (half_symbols[i].duration0 < min_time_bit) ){
+        //     ESP_LOGD(TAG, "Start bit not found");
+        //     continue;
+        // }
+        //remove the start bit
+        if(recived_bits > 0 && (total_recived_bits == 0 || (recived_bits + total_recived_bits) == 10))
+        {
+            recived_bits -= 1;
+            total_recived_bits += 1;
+        }
+
+        for (uint8_t j = 0; j < recived_bits; j++) {
+            received_byte |= (half_symbols[i].level0 << ((j + (total_recived_bits-1)) % 8 ));
+        }
+        total_recived_bits = total_recived_bits + recived_bits;
+
+        if(total_recived_bits == 10) {
+            ESP_LOGD(TAG, "reviced byte: %x, char %c", received_byte, received_byte);
+            // put_rx_byte(received_byte);
+            received_byte = 0;
+            total_recived_bits = 0;
+        }
         // if (symbols[i].level0 == 1) {
         //     received_byte |= (1 << (i % 8));
         // }
