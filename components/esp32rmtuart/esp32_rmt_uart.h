@@ -21,17 +21,35 @@ namespace esp32_rmt_uart {
 #define UART_TX_BUFFER_SIZE 256
 #define UART_RX_BUFFER_SIZE 256
 
-//class RMTUARTComponent : public uart::UARTComponent{
+#if defined(USE_ESP32) && ESP_IDF_VERSION_MAJOR >= 5
+struct ReceiverComponentStore {
+  /// Stores RMT symbols and rx done event data
+  volatile uint8_t *buffer{nullptr};
+  /// The position last written to
+  volatile uint32_t buffer_write{0};
+  /// The position last read from
+  volatile uint32_t buffer_read{0};
+  bool overflow{false};
+  uint32_t buffer_size{1000};
+  uint32_t receive_size{0};
+  esp_err_t error{ESP_OK};
+  rmt_receive_config_t config;
+};
+#endif
 
 class RMTUARTComponent : public Component, public uart::UARTComponent {
  public:
     RMTUARTComponent();
     void setup();
     void loop() override;
-    void write_byte(uint8_t byte);  // Removed 'override'
-    bool read_byte(uint8_t *byte);
+
+    void set_use_psram(bool use_psram) { this->use_psram_ = use_psram; }
+
     void set_baud_rate(int baud_rate);
     void load_settings();
+
+    void write_byte(uint8_t byte);
+    bool read_byte(uint8_t *byte);
 
 #if ESP_IDF_VERSION_MAJOR >= 5
     void set_tx_rmt_symbols(uint32_t rmt_symbols) { this->rmt_tx_symbols_ = rmt_symbols; }
@@ -111,7 +129,7 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
 
  private:
     int baud_rate_;
-
+    RemoteReceiverComponentStore store_;
 
 #if ESP_IDF_VERSION_MAJOR >= 5
     rmt_channel_handle_t channel_{nullptr};
@@ -138,6 +156,7 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     int rx_head_, rx_tail_;
     bool use_psram_;
     void process_tx_queue();
+    void put_rx_byte(uint8_t byte);
     void decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count);
     uint16_t baud_rate_timing_array_[10];
 };

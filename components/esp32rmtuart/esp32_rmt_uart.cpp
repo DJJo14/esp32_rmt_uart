@@ -22,6 +22,31 @@ static const uint32_t RMT_CLK_DIV = 1;
 #endif
 #define CLOCK_HZ (RMT_CLK_FREQ/RMT_CLK_DIV)
 
+#if ESP_IDF_VERSION_MAJOR >= 5
+static bool IRAM_ATTR HOT rmt_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *event, void *arg) {
+    ReceiverComponentStore *store = (ReceiverComponentStore *) arg;
+  rmt_rx_done_event_data_t *event_buffer = (rmt_rx_done_event_data_t *) (store->buffer + store->buffer_write);
+  uint32_t event_size = sizeof(rmt_rx_done_event_data_t);
+  uint32_t next_write = store->buffer_write + event_size + event->num_symbols * sizeof(rmt_symbol_word_t);
+  if (next_write + event_size + store->receive_size > store->buffer_size) {
+    next_write = 0;
+  }
+  if (store->buffer_read - next_write < event_size + store->receive_size) {
+    next_write = store->buffer_write;
+    store->overflow = true;
+  }
+//   if (event->num_symbols <= store->filter_symbols) {
+//     next_write = store->buffer_write;
+//   }
+  store->error =
+      rmt_receive(channel, (uint8_t *) store->buffer + next_write + event_size, store->receive_size, &store->config);
+  event_buffer->num_symbols = event->num_symbols;
+  event_buffer->received_symbols = event->received_symbols;
+  store->buffer_write = next_write;
+  return false;
+}
+#endif
+
 RMTUARTComponent::RMTUARTComponent()
     : tx_head_(0), tx_tail_(0), rx_head_(0), rx_tail_(0), use_psram_(false) {}
 
@@ -100,6 +125,77 @@ void RMTUARTComponent::setup() {
         this->status_set_warning();
         return;
     }
+    
+    // RX Configuration
+
+    rmt_rx_channel_config_t channel;
+    memset(&channel, 0, sizeof(channel));
+    channel.clk_src = RMT_CLK_SRC_DEFAULT;
+    channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
+    channel.mem_block_symbols = this->rmt_rx_symbols_;
+    channel.gpio_num = gpio_num_t(this->rx_pin_);
+    channel.intr_priority = 0;
+    channel.flags.invert_in = 0;
+    channel.flags.with_dma = 0;
+    channel.flags.io_loop_back = 0;
+    esp_err_t error = rmt_new_rx_channel(&channel, &this->channel_);
+    if (error != ESP_OK) {
+        this->error_code_ = error;
+        if (error == ESP_ERR_NOT_FOUND) {
+        this->error_string_ = "out of RMT symbol memory";
+        } else {
+        this->error_string_ = "in rmt_new_rx_channel";
+        }
+        this->mark_failed();
+        return;
+    }
+    gpio_pullup_en(gpio_num_t(this->rx_pin_));
+
+    //TODO PULLUP?
+    // if (this->pin_->get_flags() & gpio::FLAG_PULLUP) {
+    //     gpio_pullup_en(gpio_num_t(this->pin_->get_pin()));
+    // } else {
+    //     gpio_pullup_dis(gpio_num_t(this->pin_->get_pin()));
+    // }
+    error = rmt_enable(this->channel_);
+    if (error != ESP_OK) {
+        this->error_code_ = error;
+        this->error_string_ = "in rmt_enable";
+        this->mark_failed();
+        return;
+    }
+
+    rmt_rx_event_callbacks_t callbacks;
+    memset(&callbacks, 0, sizeof(callbacks));
+    callbacks.on_recv_done = rmt_callback;
+    error = rmt_rx_register_event_callbacks(this->channel_, &callbacks, &this->store_);
+    if (error != ESP_OK) {
+        this->error_code_ = error;
+        this->error_string_ = "in rmt_rx_register_event_callbacks";
+        this->mark_failed();
+        return;
+    }
+
+    
+    uint32_t event_size = sizeof(rmt_rx_done_event_data_t);
+    uint32_t max_filter_ns = 255u * 1000 / (RMT_CLK_FREQ / 1000000);
+    uint32_t max_idle_ns = 65535u * 1000;
+    memset(&this->store_.config, 0, sizeof(this->store_.config));
+    this->store_.config.signal_range_min_ns = std::min(/* 90% of baud_rate*/9000000000u/(this->baud_rate_), max_filter_ns);
+    this->store_.config.signal_range_max_ns = std::min(1000000000u/(this->baud_rate_/10), max_idle_ns);
+    this->store_.receive_size = this->rmt_rx_symbols_ * sizeof(rmt_symbol_word_t);
+    this->store_.buffer_size = std::max((event_size + this->store_.receive_size) * 2, this->rx_buffer_size_);
+    this->store_.buffer = new uint8_t[this->rx_buffer_size_];
+    error = rmt_receive(this->channel_, (uint8_t *) this->store_.buffer + event_size, this->store_.receive_size,
+                        &this->store_.config);
+    if (error != ESP_OK) {
+        this->error_code_ = error;
+        this->error_string_ = "in rmt_receive";
+        this->mark_failed();
+        return;
+    }
+
+
 #else
     RAMAllocator<rmt_item32_t> rmt_allocator(this->use_psram_ ? 0 : RAMAllocator<rmt_item32_t>::ALLOC_INTERNAL);
   
@@ -208,15 +304,26 @@ void RMTUARTComponent::process_tx_queue() {
     tx_head_ = (tx_head_ + length) % UART_TX_BUFFER_SIZE;
 }
 
+void RMTUARTComponent::put_rx_byte(uint8_t byte) {
+    rx_buffer_[rx_tail_] = byte;
+    rx_tail_ = (rx_tail_ + 1) % UART_RX_BUFFER_SIZE;
+}
+
 void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count) {
     uint8_t received_byte = 0;
-    for (int i = 1; i <= 8; i++) {
-        if (symbols[i].level0 == 1) {
-            received_byte |= (1 << (i - 1));
-        }
+    for (int i = 0; i < count; i++) {
+        ESP_LOGD(TAG, "reviced byte: %d, time %d", symbols[i].level0, symbols[i].duration0);
+        ESP_LOGD(TAG, "reviced byte: %d, time %d", symbols[i].level1, symbols[i].duration1);
+        // if (symbols[i].level0 == 1) {
+        //     received_byte |= (1 << (i % 8));
+        // }
+        // if (i % 8 == 7) {
+        //     // put_rx_byte(received_byte);
+        //     received_byte = 0;
+        // }
     }
-    rx_buffer_[rx_tail_] = received_byte;
-    rx_tail_ = (rx_tail_ + 1) % UART_RX_BUFFER_SIZE;
+
+
 }
 
 void RMTUARTComponent::write_array(const uint8_t *buffer, size_t length) {
@@ -261,7 +368,29 @@ void RMTUARTComponent::flush() {
 
 void RMTUARTComponent::loop()
 {
-    
+    #if ESP_IDF_VERSION_MAJOR >= 5
+    if (this->store_.error != ESP_OK) {
+        ESP_LOGE(TAG, "Receive error");
+        this->error_code_ = this->store_.error;
+        this->error_string_ = "in rmt_callback";
+        this->mark_failed();
+    }
+    if (this->store_.overflow) {
+        ESP_LOGW(TAG, "Buffer overflow");
+        this->store_.overflow = false;
+    }
+    uint32_t buffer_write = this->store_.buffer_write;
+    while (this->store_.buffer_read != buffer_write) {
+        rmt_rx_done_event_data_t *event = (rmt_rx_done_event_data_t *) (this->store_.buffer + this->store_.buffer_read);
+        uint32_t event_size = sizeof(rmt_rx_done_event_data_t);
+        uint32_t next_read = this->store_.buffer_read + event_size + event->num_symbols * sizeof(rmt_symbol_word_t);
+        if (next_read + event_size + this->store_.receive_size > this->store_.buffer_size) {
+        next_read = 0;
+        }
+        this->decode_rmt_rx_data(event->received_symbols, event->num_symbols);
+        this->store_.buffer_read = next_read;
+    }
+    #endif
 }
 
 void RMTUARTComponent::check_logger_conflict() {
