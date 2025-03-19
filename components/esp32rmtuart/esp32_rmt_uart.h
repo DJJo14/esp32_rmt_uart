@@ -67,6 +67,7 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     void set_rx_rmt_channel(rmt_channel_t channel) { this->rx_channel_ = channel; }
 #endif
 
+    void set_rx_buffer_size(uint32_t size) { this->rx_buffer_size_ = size; }
 
   // Sets the TX (transmit) pin for the UART bus.
   // @param tx_pin Pointer to the internal GPIO pin used for transmission.

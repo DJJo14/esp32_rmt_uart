@@ -355,17 +355,10 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
 
         if(total_recived_bits == 10) {
             ESP_LOGD(TAG, "reviced byte: %x, char %c", received_byte, received_byte);
-            // put_rx_byte(received_byte);
+            put_rx_byte(received_byte);
             received_byte = 0;
             total_recived_bits = 0;
         }
-        // if (symbols[i].level0 == 1) {
-        //     received_byte |= (1 << (i % 8));
-        // }
-        // if (i % 8 == 7) {
-        //     // put_rx_byte(received_byte);
-        //     received_byte = 0;
-        // }
     }
 
 
@@ -433,6 +426,7 @@ void RMTUARTComponent::loop()
         next_read = 0;
         }
         this->decode_rmt_rx_data(event->received_symbols, event->num_symbols);
+        ESP_LOGCONFIG(TAG, "symbols used %d", next_read);
         this->store_.buffer_read = next_read;
     }
     #endif
