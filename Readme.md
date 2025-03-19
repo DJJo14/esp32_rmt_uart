@@ -2,20 +2,26 @@
 
 Bam i just created ~~3~~ 4 extra uarts on the esp32....
 ~~not jet it is just a thery that i have come up with chatgpt~~
-i got the first part working, it still stays a prove of concept.
+~~i got the first part working, it still stays a prove of concept.~~
+I got the transmit and the revice part working, and the output looks prommising.
+I do not know if I can get it working with something like modbus. and get it as compatible as the normal uart, but i can use the fuctions get get_array and write_array, witch is normaly used.
+Currently i used a lot of code from the weikai uart and the remote_receiver and the esp32_rmt_led_strip with already using the rmt perriferal.
 
 feel free to help
 
 Todo list:
 - [x] The tx part works!, tested with the list of baudrates
-- [ ] The rx part 
-- [ ] make sure you can have multiple of then
+- [x] The rx part 
+- [ ] make sure you can have multiple of then (make config array/list)
 - [ ] turn one of the pins off
-- [ ] rx_buffer_size 
+- [x] rx_buffer_size 
+- [ ] make check on rx_buffer_size symbols (understand recive buffer!)
 - [ ] data_bits 
 - [ ] parity 
+- [ ] psudo ram?
+ -[ ] 
 - [ ] test with multiple at the same time
-- [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol)
+- [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol, with requesting data with modbus, you can use a lot less symbols)
 - [ ] check if this works with modbus or other components
 - [ ] create a correct flush function
 
