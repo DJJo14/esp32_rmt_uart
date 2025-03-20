@@ -12,14 +12,14 @@ feel free to help
 Todo list:
 - [x] The tx part works!, tested with the list of baudrates
 - [x] The rx part 
-- [ ] make sure you can have multiple of then (make config array/list)
+- [x] make sure you can have multiple of then (make config array/list)
 - [ ] turn one of the pins off
 - [x] rx_buffer_size 
 - [ ] make check on rx_buffer_size symbols (understand recive buffer!)
 - [ ] data_bits 
 - [ ] parity 
 - [ ] psudo ram?
- -[ ] 
+ -[ ] make it work for not ESP_IDF_VERSION_MAJOR >= 5?
 - [ ] test with multiple at the same time
 - [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol, with requesting data with modbus, you can use a lot less symbols)
 - [ ] check if this works with modbus or other components

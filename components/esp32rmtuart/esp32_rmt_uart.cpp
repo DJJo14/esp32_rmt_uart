@@ -186,8 +186,8 @@ void RMTUARTComponent::setup() {
     this->store_.config.signal_range_min_ns = std::min(((uint32_t)/* 90% of baud_rate*/9000000000u/(this->baud_rate_)), max_filter_ns);
     this->store_.config.signal_range_max_ns = std::min(1000000000u/(this->baud_rate_/10), max_idle_ns);
     this->store_.receive_size = this->rmt_rx_symbols_ * sizeof(rmt_symbol_word_t);
-    this->store_.buffer_size = std::max((event_size + this->store_.receive_size) * 2, this->rx_buffer_size_);
-    this->store_.buffer = new uint8_t[this->rx_buffer_size_];
+    this->store_.buffer_size = (event_size + this->store_.receive_size) * 3;
+    this->store_.buffer = new uint8_t[this->store_.buffer_size];
     error = rmt_receive(this->rx_channel_, (uint8_t *) this->store_.buffer + event_size, this->store_.receive_size,
                         &this->store_.config);
     if (error != ESP_OK) {
@@ -330,7 +330,7 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
             recived_bits = half_symbols[i].duration0 / min_time_bit;
         }
         
-        ESP_LOGD(TAG, "reviced biit: %d, time %d, bits %d total %d", half_symbols[i].level0, half_symbols[i].duration0, recived_bits, total_recived_bits);
+        // ESP_LOGD(TAG, "reviced biit: %d, time %d, bits %d total %d", half_symbols[i].level0, half_symbols[i].duration0, recived_bits, total_recived_bits);
 
         if(total_recived_bits == 0 && (half_symbols[i].level0 != 0)) {
             ESP_LOGD(TAG, "Start bit not found");
@@ -414,7 +414,7 @@ void RMTUARTComponent::loop()
         this->mark_failed();
     }
     if (this->store_.overflow) {
-        ESP_LOGW(TAG, "Buffer overflow");
+        ESP_LOGW(TAG, "Buffer overflow read: %d write: %d", this->store_.buffer_read, this->store_.buffer_write);
         this->store_.overflow = false;
     }
     uint32_t buffer_write = this->store_.buffer_write;
@@ -426,7 +426,7 @@ void RMTUARTComponent::loop()
         next_read = 0;
         }
         this->decode_rmt_rx_data(event->received_symbols, event->num_symbols);
-        ESP_LOGCONFIG(TAG, "symbols used %d", next_read);
+        ESP_LOGCONFIG(TAG, "symbols used %d of %d", next_read, this->store_.buffer_size);
         this->store_.buffer_read = next_read;
     }
     #endif
