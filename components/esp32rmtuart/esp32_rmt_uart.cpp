@@ -71,8 +71,8 @@ void RMTUARTComponent::setup() {
 #if ESP_IDF_VERSION_MAJOR >= 5
     RAMAllocator<rmt_symbol_word_t> rmt_allocator(this->use_psram_ ? 0 : RAMAllocator<rmt_symbol_word_t>::ALLOC_INTERNAL);
   
-    // 8 bits per byte, 1 rmt_symbol_word_t per bit + 1 rmt_symbol_word_t for reset
-    this->rmt_tx_buf_ = rmt_allocator.allocate(tx_buffer_size_ * 8 + 1);
+    // 10 bits per byte, 1 rmt_symbol_word_t per bit + 1 rmt_symbol_word_t for reset
+    this->rmt_tx_buf_ = rmt_allocator.allocate(tx_buffer_size_ * 10 + 1);
   
     rmt_tx_channel_config_t tx_channel;
     memset(&tx_channel, 0, sizeof(tx_channel));
@@ -129,6 +129,8 @@ void RMTUARTComponent::setup() {
     }
     
     // RX Configuration
+
+    this->rx_buffer_ =  new uint8_t[this->rx_buffer_size_];
 
     rmt_rx_channel_config_t rx_channel;
     memset(&rx_channel, 0, sizeof(rx_channel));
@@ -247,7 +249,7 @@ void RMTUARTComponent::write_byte(uint8_t byte) {
 bool RMTUARTComponent::read_byte(uint8_t *byte) {
     if (rx_head_ == rx_tail_) return false;
     *byte = rx_buffer_[rx_head_];
-    rx_head_ = (rx_head_ + 1) % UART_RX_BUFFER_SIZE;
+    rx_head_ = (rx_head_ + 1) % this->rx_buffer_size_;
     return true;
 }
 
@@ -308,22 +310,32 @@ void RMTUARTComponent::process_tx_queue() {
 
 void RMTUARTComponent::put_rx_byte(uint8_t byte) {
     rx_buffer_[rx_tail_] = byte;
-    rx_tail_ = (rx_tail_ + 1) % UART_RX_BUFFER_SIZE;
+    rx_tail_ = (rx_tail_ + 1) % this->rx_buffer_size_;
 }
 
 void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count) {
     uint32_t min_time_bit = this->baud_rate_timing_array_[0] * 9 / 10;
-    ESP_LOGD(TAG, "bit time %d", min_time_bit);
-    uint8_t received_byte = 0;
+    uint16_t data_bytes_mask = (1 << this->data_bits_) - 1;
+    uint16_t received_byte = 0;
     uint8_t recived_bits = 0;
     uint32_t total_recived_bits = 0;
     rmt_symbol_half_word_t *half_symbols = (rmt_symbol_half_word_t *) symbols;
     uint32_t count_half = count * 2;
 
     for (int i = 0; i < count_half; i++) {
+        if(total_recived_bits == 0 && (half_symbols[i].level0 != 0)) {
+            ESP_LOGD(TAG, "Start bit not found");
+            continue;
+        } 
+
+        if(total_recived_bits == 0 && (half_symbols[i].duration0 < min_time_bit) ){
+            ESP_LOGD(TAG, "Start bit not found");
+            continue;
+        }
+
         if (half_symbols[i].duration0 == 0) {
             //this is the last bit, before idle
-            recived_bits = 1;
+            recived_bits = (1 + this->data_bits_ + this->stop_bits_) - total_recived_bits;
         }
         else
         {
@@ -332,30 +344,17 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
         
         // ESP_LOGD(TAG, "reviced biit: %d, time %d, bits %d total %d", half_symbols[i].level0, half_symbols[i].duration0, recived_bits, total_recived_bits);
 
-        if(total_recived_bits == 0 && (half_symbols[i].level0 != 0)) {
-            ESP_LOGD(TAG, "Start bit not found");
-            continue;
-        } 
-
-        // if(total_recived_bits == 0 && (half_symbols[i].duration0 < min_time_bit) ){
-        //     ESP_LOGD(TAG, "Start bit not found");
-        //     continue;
-        // }
-        //remove the start bit
-        if(recived_bits > 0 && (total_recived_bits == 0 || (recived_bits + total_recived_bits) == 10))
-        {
-            recived_bits -= 1;
-            total_recived_bits += 1;
+        if (half_symbols[i].level0 == 1){
+            for (uint8_t j = 0; j < recived_bits; j++) {
+                received_byte |= (1 << (j + (total_recived_bits)) );
+            }
         }
 
-        for (uint8_t j = 0; j < recived_bits; j++) {
-            received_byte |= (half_symbols[i].level0 << ((j + (total_recived_bits-1)) % 8 ));
-        }
         total_recived_bits = total_recived_bits + recived_bits;
 
-        if(total_recived_bits == 10) {
-            ESP_LOGD(TAG, "reviced byte: %x, char %c", received_byte, received_byte);
-            put_rx_byte(received_byte);
+        if(total_recived_bits >= (1 + this->data_bits_ + this->stop_bits_) ) {
+            ESP_LOGD(TAG, "reviced byte: %x, char %c (%x)", received_byte, (uint8_t)((received_byte >> 1) & data_bytes_mask) , (uint8_t)((received_byte >> 1) & data_bytes_mask));
+            put_rx_byte((uint8_t)((received_byte >> 1) & data_bytes_mask) );
             received_byte = 0;
             total_recived_bits = 0;
         }
@@ -395,7 +394,7 @@ bool RMTUARTComponent::peek_byte(uint8_t *buffer) {
 }
 
 int RMTUARTComponent::available() {
-    return (rx_tail_ - rx_head_ + UART_RX_BUFFER_SIZE) % UART_RX_BUFFER_SIZE;
+    return (rx_tail_ - rx_head_ + this->rx_buffer_size_) % this->rx_buffer_size_;
 }
 
 void RMTUARTComponent::flush() {

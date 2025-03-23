@@ -21,7 +21,7 @@ namespace esp32_rmt_uart {
 #define DEFAULT_BAUD_RATE 9600
 #define RMT_TX_SYMBOLS_PER_BYTE 5
 #define UART_TX_BUFFER_SIZE 256
-#define UART_RX_BUFFER_SIZE 256
+#define DEFAULT_UART_RX_BUFFER_SIZE 256
 
 #if defined(USE_ESP32) && ESP_IDF_VERSION_MAJOR >= 5
 struct ReceiverComponentStore {
@@ -161,9 +161,9 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
 
 
     uint8_t tx_buffer_[UART_TX_BUFFER_SIZE];
-    uint8_t rx_buffer_[UART_RX_BUFFER_SIZE];
+    uint8_t * rx_buffer_;
     uint32_t tx_buffer_size_ = UART_TX_BUFFER_SIZE;
-    uint32_t rx_buffer_size_ = UART_RX_BUFFER_SIZE;
+    uint32_t rx_buffer_size_ = DEFAULT_UART_RX_BUFFER_SIZE;
     int tx_head_, tx_tail_;
     int rx_head_, rx_tail_;
     bool use_psram_;

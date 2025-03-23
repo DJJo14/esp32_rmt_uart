@@ -14,11 +14,13 @@ from esphome.const import (
     CONF_RMT_SYMBOLS,
     CONF_RX_BUFFER_SIZE
 )
-    # CONF_STOP_BITS,
-    # CONF_PARITY,
-    # CONF_DATA_BITS,
-    # CONF_RX_BUFFER_SIZE,
+
 from esphome.core import CORE
+
+CONF_STOP_BITS = "stop_bits"
+CONF_DATA_BITS = "data_bits"
+CONF_PARITY = "parity"
+
 
 CONF_RMT_TX_CHANNEL = "rmt_tx_channel"
 CONF_RMT_RX_CHANNEL = "rmt_rx_channel"
@@ -76,12 +78,11 @@ CONFIG_SCHEMA = cv.Schema({
         not_with_new_rmt_driver, esp32_rmt.validate_rmt_channel(tx=False)
     ),
     cv.Optional(CONF_RX_BUFFER_SIZE, default=1000): cv.validate_bytes,
-    # cv.Optional(CONF_STOP_BITS, default=1): cv.one_of(1, 2, int=True),
+    cv.Optional(CONF_STOP_BITS, default=1): cv.one_of(1, 2, int=True),
     # cv.Optional(CONF_PARITY, default="NONE"): cv.enum(
         # uart.UART_PARITY_OPTIONS, upper=True
     # ),
-    # cv.Optional(CONF_DATA_BITS, default=8): cv.int_range(min=5, max=8),
-    #TODO Calcualte how mutch symbols are needed for this
+    cv.Optional(CONF_DATA_BITS, default=8): cv.int_range(min=7, max=8),
     OptionalForIDF5(
                 CONF_RMT_TX_SYMBOLS,
                 esp32_idf=192,
@@ -110,8 +111,8 @@ async def to_code(config):
     cg.add(var.set_rx_pin(config[CONF_RX_PIN]))
     cg.add(var.set_baud_rate(config[CONF_BAUD_RATE]))  # Set baud rate
     cg.add(var.set_rx_buffer_size(config[CONF_RX_BUFFER_SIZE]))
-    # cg.add(var.set_stop_bits(config[CONF_STOP_BITS]))
-    # cg.add(var.set_data_bits(config[CONF_DATA_BITS]))
+    cg.add(var.set_stop_bits(config[CONF_STOP_BITS]))
+    cg.add(var.set_data_bits(config[CONF_DATA_BITS]))
     # cg.add(var.set_parity(config[CONF_PARITY]))
 
     if esp32_rmt.use_new_rmt_driver():
