@@ -15,8 +15,9 @@ Todo list:
 - [x] make sure you can have multiple of then (make config array/list)
 - [ ] turn one of the pins off
 - [x] rx_buffer_size 
-- [ ] make check on rx_buffer_size symbols (understand recive buffer!)
-- [ ] data_bits 
+- [x] make check on rx_buffer_size symbols (understand recive buffer!)
+- [x] data_bits 
+- [x] stop bits
 - [ ] parity 
 - [ ] psudo ram?
  -[ ] make it work for not ESP_IDF_VERSION_MAJOR >= 5?
