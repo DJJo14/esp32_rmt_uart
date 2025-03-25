@@ -262,36 +262,59 @@ void RMTUARTComponent::process_tx_queue() {
         ESP_LOGE(TAG, "RMT TX buffer is null");
         return;
     }
-    
-    if (rmt_tx_symbols_ < length * RMT_TX_SYMBOLS_PER_BYTE) {
-        length = rmt_tx_symbols_ / RMT_TX_SYMBOLS_PER_BYTE;
+    uint8_t rmt_bits_per_send_bytes = 1 /*start bit */ + this->data_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0) + 1 /*stop bit always 1 sinds we make the time longer*/;
+
+
+    if (rmt_tx_symbols_ <= (length * rmt_bits_per_send_bytes)/2 ) {
+        length = (rmt_tx_symbols_ / rmt_bits_per_send_bytes) * 2;
     }
 
-    rmt_symbol_word_t *symbols = this->rmt_tx_buf_;
+    rmt_symbol_half_word_t *half_symbols = (rmt_symbol_half_word_t *) this->rmt_tx_buf_;
     uint8_t byte;
-
+    
     for (int j = 0; j < length; j++) {
         byte = tx_buffer_[(tx_head_ + j) % UART_TX_BUFFER_SIZE];
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].val = 0;
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].duration0 = this->baud_rate_timing_array_[0];
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE].level0 = 0; // Start bit
-        for (int i = 0; i < 4; i++) {
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].duration1 = this->baud_rate_timing_array_[i + 1];
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i].level1 = (byte >> (i * 2)) & 1;
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].val = 0;
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].duration0 = this->baud_rate_timing_array_[i + 1];
-            symbols[j * RMT_TX_SYMBOLS_PER_BYTE + i + 1].level0 = (byte >> (i * 2 + 1)) & 1;
+        bool parity_bit = (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE) ? __builtin_parity(byte) : 0;
+         // Start bit
+        // half_symbols[j * rmt_bits_per_send_bytes].val = 0;
+        half_symbols[j * rmt_bits_per_send_bytes].duration0 = this->baud_rate_timing_array_[0];
+        half_symbols[j * rmt_bits_per_send_bytes].level0 = 0;
+        for (int i = 0; i < this->data_bits_; i++) {
+            // half_symbols[j * rmt_bits_per_send_bytes + i + 1].val = 0;
+            half_symbols[j * rmt_bits_per_send_bytes + i + 1].duration0 = this->baud_rate_timing_array_[i + 1];
+            half_symbols[j * rmt_bits_per_send_bytes + i + 1].level0 = (byte >> (i)) & 1;
         }
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE - 1].duration1 = this->baud_rate_timing_array_[9];
-        symbols[j * RMT_TX_SYMBOLS_PER_BYTE + RMT_TX_SYMBOLS_PER_BYTE - 1].level1 = 1; // Stop bit
+        if(this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE)
+        {
+            // Parity bit
+            // half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_].val = 0;
+            half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_].duration0 = this->baud_rate_timing_array_[9];
+            half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_].level0 = parity_bit; 
+        }
+        // stop bit
+        // half_symbols[j * rmt_bits_per_send_bytes + rmt_bits_per_send_bytes - 1].val = 0;
+        half_symbols[j * rmt_bits_per_send_bytes + rmt_bits_per_send_bytes - 1].duration0 = this->stop_bits_ * this->baud_rate_timing_array_[9];
+        half_symbols[j * rmt_bits_per_send_bytes + rmt_bits_per_send_bytes - 1].level0 = 1; 
     }
+    uint8_t rmt_symbols_to_send = (length * rmt_bits_per_send_bytes)/2;
+    if(rmt_symbols_to_send % 2 != 0)
+    {
+        // half_symbols[length * rmt_bits_per_send_bytes].val = 0;
+        half_symbols[length * rmt_bits_per_send_bytes].duration0 = 1;
+        half_symbols[length * rmt_bits_per_send_bytes].level0 = 1;
+        rmt_symbols_to_send++;
+    }
+    rmt_symbol_word_t *symbols = (rmt_symbol_word_t *) half_symbols;
+    ESP_LOGD(TAG, "Sending %d symbols", rmt_symbols_to_send);
+    ESP_LOGD(TAG, "Sending %d bytes", length);
+
     
 #if ESP_IDF_VERSION_MAJOR >= 5
     rmt_transmit_config_t config;
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
     config.flags.eot_level = 1;
-    error = rmt_transmit(this->tx_channel_, this->encoder_, symbols, length * RMT_TX_SYMBOLS_PER_BYTE * sizeof(rmt_symbol_word_t), &config);
+    error = rmt_transmit(this->tx_channel_, this->encoder_, half_symbols, rmt_symbols_to_send * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
     {
@@ -321,6 +344,7 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
     uint32_t total_recived_bits = 0;
     rmt_symbol_half_word_t *half_symbols = (rmt_symbol_half_word_t *) symbols;
     uint32_t count_half = count * 2;
+    bool parity_bit = false;
 
     for (int i = 0; i < count_half; i++) {
         if(total_recived_bits == 0 && (half_symbols[i].level0 != 0)) {
@@ -335,7 +359,7 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
 
         if (half_symbols[i].duration0 == 0) {
             //this is the last bit, before idle
-            recived_bits = (1 + this->data_bits_ + this->stop_bits_) - total_recived_bits;
+            recived_bits = (1 + this->data_bits_ + this->stop_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0)) - total_recived_bits;
         }
         else
         {
@@ -352,15 +376,24 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
 
         total_recived_bits = total_recived_bits + recived_bits;
 
-        if(total_recived_bits >= (1 + this->data_bits_ + this->stop_bits_) ) {
-            ESP_LOGD(TAG, "reviced byte: %x, char %c (%x)", received_byte, (uint8_t)((received_byte >> 1) & data_bytes_mask) , (uint8_t)((received_byte >> 1) & data_bytes_mask));
-            put_rx_byte((uint8_t)((received_byte >> 1) & data_bytes_mask) );
+        if(total_recived_bits >= (1 + this->data_bits_ + this->stop_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0)) ) {
+            if (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE) {
+                parity_bit = (received_byte >> (this->data_bits_ + 1)) & 1;
+                uint8_t data_byte = (uint8_t)((received_byte >> 1) & data_bytes_mask);
+                bool calculated_parity = __builtin_parity(data_byte);
+                if ((this->parity_ == esphome::uart::UART_CONFIG_PARITY_EVEN && calculated_parity != parity_bit) ||
+                    (this->parity_ == esphome::uart::UART_CONFIG_PARITY_ODD && calculated_parity == parity_bit)) {
+                    ESP_LOGW(TAG, "Parity error detected");
+                } else {
+                    put_rx_byte(data_byte);
+                }
+            } else {
+                put_rx_byte((uint8_t)((received_byte >> 1) & data_bytes_mask));
+            }
             received_byte = 0;
             total_recived_bits = 0;
         }
     }
-
-
 }
 
 void RMTUARTComponent::write_array(const uint8_t *buffer, size_t length) {

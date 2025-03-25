@@ -38,6 +38,12 @@ CODEOWNERS = ["@DJJo14"]
 rmt_uart_ns = cg.esphome_ns.namespace("esp32_rmt_uart")
 RMTUARTComponent = rmt_uart_ns.class_("RMTUARTComponent", cg.Component,uart.UARTComponent)
 
+UARTParityOptions = rmt_uart_ns.enum("UARTParityOptions")
+UART_PARITY_OPTIONS = {
+    "NONE": UARTParityOptions.UART_CONFIG_PARITY_NONE,
+    "EVEN": UARTParityOptions.UART_CONFIG_PARITY_EVEN,
+    "ODD": UARTParityOptions.UART_CONFIG_PARITY_ODD,
+}
 
 
 def not_with_new_rmt_driver(obj):
@@ -79,9 +85,9 @@ CONFIG_SCHEMA = cv.Schema({
     ),
     cv.Optional(CONF_RX_BUFFER_SIZE, default=1000): cv.validate_bytes,
     cv.Optional(CONF_STOP_BITS, default=1): cv.one_of(1, 2, int=True),
-    # cv.Optional(CONF_PARITY, default="NONE"): cv.enum(
-        # uart.UART_PARITY_OPTIONS, upper=True
-    # ),
+    cv.Optional(CONF_PARITY, default="NONE"): cv.enum(
+        uart.UART_PARITY_OPTIONS, upper=True
+    ),
     cv.Optional(CONF_DATA_BITS, default=8): cv.int_range(min=7, max=8),
     OptionalForIDF5(
                 CONF_RMT_TX_SYMBOLS,
@@ -113,7 +119,7 @@ async def to_code(config):
     cg.add(var.set_rx_buffer_size(config[CONF_RX_BUFFER_SIZE]))
     cg.add(var.set_stop_bits(config[CONF_STOP_BITS]))
     cg.add(var.set_data_bits(config[CONF_DATA_BITS]))
-    # cg.add(var.set_parity(config[CONF_PARITY]))
+    cg.add(var.set_parity(config[CONF_PARITY]))
 
     if esp32_rmt.use_new_rmt_driver():
         cg.add(var.set_tx_rmt_symbols(config[CONF_RMT_TX_SYMBOLS]))
