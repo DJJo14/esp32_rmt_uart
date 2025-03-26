@@ -1,15 +1,38 @@
 # ESP32 RMT uart
 
-Bam i just created ~~3~~ 4 extra uarts on the esp32....
-~~not jet it is just a thery that i have come up with chatgpt~~
-~~i got the first part working, it still stays a prove of concept.~~
-I got the transmit and the revice part working, and the output looks prommising.
-~~I do not know if I can get it working with something like modbus. and get it as compatible as the normal uart, but i can use the fuctions get get_array and write_array, witch is normaly used.~~
-A test modbus client is working with the esp32_rmt_uart!! it is almost the same as the normal uart!
-there are still some small bugs and features, but i am working on it.
-Currently i used a lot of code from the weikai uart and the remote_receiver and the esp32_rmt_led_strip with already using the rmt perriferal.
+Bam i just created 4 extra uarts on the esp32....
+It started as a prove of concept, but it is working now. For this uart i used the RMT perriferal.
 
-feel free to help
+the RMT perriferal is used for sending and reciving signals. It is already used in esphome for the IR remote and the led strip.
+I used the RMT perriferal to send and recive uart signals. I used the RMT perriferal because it is non blocking even in the recive part.
+This looks perfect but there is a but.
+
+## limitations
+
+This uart is meant to be used in combination with modbus, because the number of bytes that are send and recive are limited.
+The RMT perriferal uses symbols. in a symbol you can set the level of the signal and the duration of the signal. To make it more complicated in one symbol the can set 2 levels and 2 durations.
+The ESP32 has a limit of 512 symbols. and can be spread out over 8 channels. One channel is used for the tx and one for the rx.
+Sinds you send and recive data per bit, you need 5 symbols for 1 byte. 1 start bit, 8 data bits, 1 stop bit. but keep in mind that if you add parity, you need 1 extra symbol.
+But there are more limitations the minimal symbols that you can use per channel is 64.
+
+But if the data is perditional, you can use less symbols. (Currently only for the rx part, see TODO list) For example if you recive a lot of 0's you can use 1 symbol, sinds the level does not change and only the during takes longer.
+
+This is why this is perfect for modbus, because you know (for the most part) what you are going to recive. If you request a holding register, you know that you are going to recive 2 bytes per holding register (+ adress + count + crc (2bytes)). And if you only send to modbus adress 0x01, you know that you are going to recive the same byte back. So for the adress part it uses (1 (startbit) + 1 (adress high) + 1 (adress low) + 1 (stop bit))/2 = 2 symbols. 
+But if you addres is 0x55 you need all 10/2 = 5 symbols. (always keep that in mind for the unknown data)
+
+The newer esp32's have dma on this periferal, so there is not the same limit as the older/clasic esp32's. But i did not tested this yet, i even got the hardware yet.
+
+**If you think u can just spin up 3 (clasic) + 4 (rmt) = 7 uart, you are probably limited by some other limitation. the cpu usage or the memory usage. But i did not tested this yet. Take it to the limit and let me know**
+
+# Finding so far
+I tested a lot op baud rates, and my pc recived them perfectly.
+A test with 2 modbus client is working with the esp32_rmt_uart!! it is almost the same as the normal uart!
+
+There are still some small bugs and features, but i am working on it.
+Currently i used a lot of code from the weikai uart and the remote_receiver and the esp32_rmt_led_strip with already using the rmt perriferal.
+thats why the folders are copied from the esphome project.
+
+Feel free to help!
 
 Todo list:
 - [x] The tx part works!, tested with the list of baudrates
@@ -22,11 +45,15 @@ Todo list:
 - [x] stop bits
 - [x] parity 
 - [ ] psudo ram?
+- [ ] DMA?
  -[ ] make it work for not ESP_IDF_VERSION_MAJOR >= 5?
-- [ ] test with multiple uarts at the same time
+- [X] test with multiple uarts at the same time
 - [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol, with requesting data with modbus, you can use a lot less symbols)
 - [x] check if this works with modbus or other components
 - [ ] create a correct flush function
+- [ ] check function if max symbols are reached.
+- [ ] test if you can import it in you esphome yaml
+- [ ] Test Baud rate lower than 9600
 
 # Examples
 
