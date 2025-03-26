@@ -263,7 +263,7 @@ void RMTUARTComponent::process_tx_queue() {
         return;
     }
     uint8_t rmt_bits_per_send_bytes = 1 /*start bit */ + this->data_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0) + 1 /*stop bit always 1 sinds we make the time longer*/;
-
+    ESP_LOGD(TAG, "rmt_bits_per_send_bytes: %d", rmt_bits_per_send_bytes);
 
     if (rmt_tx_symbols_ <= (length * rmt_bits_per_send_bytes)/2 ) {
         length = (rmt_tx_symbols_ / rmt_bits_per_send_bytes) * 2;
@@ -276,37 +276,30 @@ void RMTUARTComponent::process_tx_queue() {
         byte = tx_buffer_[(tx_head_ + j) % UART_TX_BUFFER_SIZE];
         bool parity_bit = (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE) ? __builtin_parity(byte) : 0;
          // Start bit
-        // half_symbols[j * rmt_bits_per_send_bytes].val = 0;
         half_symbols[j * rmt_bits_per_send_bytes].duration0 = this->baud_rate_timing_array_[0];
         half_symbols[j * rmt_bits_per_send_bytes].level0 = 0;
         for (int i = 0; i < this->data_bits_; i++) {
-            // half_symbols[j * rmt_bits_per_send_bytes + i + 1].val = 0;
             half_symbols[j * rmt_bits_per_send_bytes + i + 1].duration0 = this->baud_rate_timing_array_[i + 1];
             half_symbols[j * rmt_bits_per_send_bytes + i + 1].level0 = (byte >> (i)) & 1;
         }
         if(this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE)
         {
             // Parity bit
-            // half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_].val = 0;
-            half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_].duration0 = this->baud_rate_timing_array_[9];
-            half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_].level0 = parity_bit; 
+            half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_ + 1].duration0 = this->baud_rate_timing_array_[9];
+            half_symbols[j * rmt_bits_per_send_bytes + this->data_bits_ + 1].level0 = (this->parity_ != esphome::uart::UART_CONFIG_PARITY_ODD) ? parity_bit & 1 : (parity_bit ^ 1)  & 1; 
         }
         // stop bit
-        // half_symbols[j * rmt_bits_per_send_bytes + rmt_bits_per_send_bytes - 1].val = 0;
         half_symbols[j * rmt_bits_per_send_bytes + rmt_bits_per_send_bytes - 1].duration0 = this->stop_bits_ * this->baud_rate_timing_array_[9];
         half_symbols[j * rmt_bits_per_send_bytes + rmt_bits_per_send_bytes - 1].level0 = 1; 
     }
     uint8_t rmt_symbols_to_send = (length * rmt_bits_per_send_bytes)/2;
-    if(rmt_symbols_to_send % 2 != 0)
+    if((length * rmt_bits_per_send_bytes) % 2 != 0)
     {
-        // half_symbols[length * rmt_bits_per_send_bytes].val = 0;
         half_symbols[length * rmt_bits_per_send_bytes].duration0 = 1;
         half_symbols[length * rmt_bits_per_send_bytes].level0 = 1;
         rmt_symbols_to_send++;
     }
     rmt_symbol_word_t *symbols = (rmt_symbol_word_t *) half_symbols;
-    ESP_LOGD(TAG, "Sending %d symbols", rmt_symbols_to_send);
-    ESP_LOGD(TAG, "Sending %d bytes", length);
 
     
 #if ESP_IDF_VERSION_MAJOR >= 5
