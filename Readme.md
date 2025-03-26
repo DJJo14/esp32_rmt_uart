@@ -4,7 +4,9 @@ Bam i just created ~~3~~ 4 extra uarts on the esp32....
 ~~not jet it is just a thery that i have come up with chatgpt~~
 ~~i got the first part working, it still stays a prove of concept.~~
 I got the transmit and the revice part working, and the output looks prommising.
-I do not know if I can get it working with something like modbus. and get it as compatible as the normal uart, but i can use the fuctions get get_array and write_array, witch is normaly used.
+~~I do not know if I can get it working with something like modbus. and get it as compatible as the normal uart, but i can use the fuctions get get_array and write_array, witch is normaly used.~~
+A test modbus client is working with the esp32_rmt_uart!! it is almost the same as the normal uart!
+there are still some small bugs and features, but i am working on it.
 Currently i used a lot of code from the weikai uart and the remote_receiver and the esp32_rmt_led_strip with already using the rmt perriferal.
 
 feel free to help
@@ -18,66 +20,22 @@ Todo list:
 - [x] make check on rx_buffer_size symbols (understand recive buffer!)
 - [x] data_bits 
 - [x] stop bits
-- [ ] parity 
+- [x] parity 
 - [ ] psudo ram?
  -[ ] make it work for not ESP_IDF_VERSION_MAJOR >= 5?
-- [ ] test with multiple at the same time
+- [ ] test with multiple uarts at the same time
 - [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol, with requesting data with modbus, you can use a lot less symbols)
-- [ ] check if this works with modbus or other components
+- [x] check if this works with modbus or other components
 - [ ] create a correct flush function
 
+# Examples
 
-the testing configuration
-```yaml
-external_components:
-  - source:
-      type: local
-      path: "/config/components"
+## uart echo
+A uart test can you find in [esp32_rmt_uart_test.yaml](esp32_rmt_uart_test.yaml) you need to add the [base_example.yaml](base_example.yaml)
+it recives characters and sends them back every 5 seconds. the pins are set to de default pins of the esp32. So you can just use a example board
 
-esp32:
-  board: esp32dev
-  framework:
-    type: esp-idf
+## modbus
+A modbus test can you find in [esp32_rmt_uart_modbus_test.yaml](esp32_rmt_uart_modbus_test.yaml) you need to add the [base_example.yaml](base_example.yaml)
+Ony your pc you need to run [test_modbus_server.py](test_modbus_server.py). (requires python3 and pyserial, pymodbus==3.8.4)
+the esp32 will request holding register every 0.5 sec and the python script will answer. and every read the value will be increased by 1.
 
-
-# Enable logging
-logger:
-  level: DEBUG 
-  baud_rate: 0
-
-# and the extra's for api and wifi
-
-web_server:
-  port: 80
-
-esp32rmtuart:
-  id: rmt1
-  tx_pin: 1
-  rx_pin: 3
-  # tested baud_rate
-  # baud_rate: 19200
-  # baud_rate: 38400
-  # baud_rate: 57600
-  baud_rate: 115200
-  # baud_rate: 230400
-  # baud_rate: 460800
-  # baud_rate: 921600
-  # rmt_tx_channel: 1
-  # rmt_rx_channel: 2
-
-interval:
-  - interval: 1s
-    then:
-      - logger.log: "sending A"
-      - lambda: |-
-          const uint8_t str1[] = "hello World \r\n";
-          id(rmt1).write_array(str1, sizeof(str1));
-      # - delay: 
-      #     10s
-      # - lambda: id(rmt1).write_byte('a');
-      # - uart.write: 
-      #     id: rmt1
-      #     data: 'Hello World\r\n'
-      # - lambda: id(rmt1).write_byte('b');
-      # - lambda: id(rmt1).write_byte('c');
-```

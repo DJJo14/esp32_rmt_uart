@@ -263,7 +263,6 @@ void RMTUARTComponent::process_tx_queue() {
         return;
     }
     uint8_t rmt_bits_per_send_bytes = 1 /*start bit */ + this->data_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0) + 1 /*stop bit always 1 sinds we make the time longer*/;
-    ESP_LOGD(TAG, "rmt_bits_per_send_bytes: %d", rmt_bits_per_send_bytes);
 
     if (rmt_tx_symbols_ <= (length * rmt_bits_per_send_bytes)/2 ) {
         length = (rmt_tx_symbols_ / rmt_bits_per_send_bytes) * 2;

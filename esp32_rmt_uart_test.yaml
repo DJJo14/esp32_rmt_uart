@@ -1,0 +1,76 @@
+external_components:
+  - source:
+      type: local
+      path: "/config/components"
+
+
+esphome:
+  name: rmtuarttest
+  friendly_name: ESP32 RMT UART Test
+
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+  # Does it also work with the Arduino framework?
+  # framework:
+  #   type: arduino
+
+# Enable logging
+logger:
+  level: DEBUG 
+  baud_rate: 0
+  # logs:
+  #   huawei_r4850: VERBOSE
+
+
+    
+
+  
+
+
+esp32rmtuart:
+    id: rmt1 
+    tx_pin: 1
+    rx_pin: 3
+    # tested baud_rate
+    # baud_rate: 19200
+    # baud_rate: 38400
+    # baud_rate: 57600
+    baud_rate: 115200
+    # baud_rate: 230400
+    # baud_rate: 460800
+    # baud_rate: 921600
+    stop_bits: 1
+    data_bits: 8
+    parity: NONE
+    rmt_rx_symbols: 192
+
+
+
+interval:
+  - interval: 5s
+    then:
+      - logger.log: "sending A"
+      - lambda: |-
+          // const uint8_t str1[] = "hello World \r\n";
+          
+          // id(rmt1).write_array(str1, sizeof(str1));
+
+          auto length = id(rmt1).available();
+          uint8_t buffer[128];
+          if (length > 0) {
+            auto status = id(rmt1).read_array(buffer, length);
+            id(rmt1).write_array(buffer, length);
+          }
+
+      # - delay: 
+      #     10s
+      # - lambda: id(rmt1).write_byte('a');
+      # - uart.write: 
+      #     id: rmt1
+      #     data: 'Hello World\r\n'
+      # - lambda: id(rmt1).write_byte('b');
+      # - lambda: id(rmt1).write_byte('c');
+      # // id(rmt1).load_settings();
