@@ -99,7 +99,7 @@ CONFIG_SCHEMA = cv.All( cv.Schema({
                     esp32_c3_idf=96,
                     esp32_c6_idf=96,
                     esp32_h2_idf=96,
-                ): cv.All(only_with_new_rmt_driver, cv.int_range(min=2)),
+                ): cv.All(only_with_new_rmt_driver, cv.int_range(min=64)),
         OptionalForIDF5(
                     CONF_RMT_RX_SYMBOLS,
                     esp32_idf=192,
@@ -108,7 +108,7 @@ CONFIG_SCHEMA = cv.All( cv.Schema({
                     esp32_c3_idf=96,
                     esp32_c6_idf=96,
                     esp32_h2_idf=96,
-                ): cv.All(only_with_new_rmt_driver, cv.int_range(min=2)),
+                ): cv.All(only_with_new_rmt_driver, cv.int_range(min=64)),
     }).extend(cv.COMPONENT_SCHEMA),
     cv.only_on([PLATFORM_ESP32]),
 )
