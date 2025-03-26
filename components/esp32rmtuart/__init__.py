@@ -12,7 +12,8 @@ from esphome.const import (
     CONF_BAUD_RATE,
     CONF_RMT_CHANNEL,
     CONF_RMT_SYMBOLS,
-    CONF_RX_BUFFER_SIZE
+    CONF_RX_BUFFER_SIZE,
+    PLATFORM_ESP32
 )
 
 from esphome.core import CORE
@@ -37,6 +38,7 @@ CODEOWNERS = ["@DJJo14"]
 
 rmt_uart_ns = cg.esphome_ns.namespace("esp32_rmt_uart")
 RMTUARTComponent = rmt_uart_ns.class_("RMTUARTComponent", cg.Component,uart.UARTComponent)
+MULTI_CONF = True
 
 UARTParityOptions = rmt_uart_ns.enum("UARTParityOptions")
 UART_PARITY_OPTIONS = {
@@ -72,42 +74,44 @@ class OptionalForIDF5(cv.SplitDefault):
         # Ignore default set from vol.Optional
         pass
 
-CONFIG_SCHEMA = cv.Schema({
-    cv.GenerateID(CONF_ID): cv.declare_id(RMTUARTComponent),
-    cv.Required(CONF_TX_PIN): pins.internal_gpio_output_pin_number,
-    cv.Required(CONF_RX_PIN): pins.internal_gpio_output_pin_number,
-    cv.Optional(CONF_BAUD_RATE, default=9600): cv.positive_int,  # Default to 9600 baud
-    cv.Optional(CONF_RMT_TX_CHANNEL): cv.All(
-        not_with_new_rmt_driver, esp32_rmt.validate_rmt_channel(tx=True)
-    ),
-    cv.Optional(CONF_RMT_RX_CHANNEL): cv.All(
-        not_with_new_rmt_driver, esp32_rmt.validate_rmt_channel(tx=False)
-    ),
-    cv.Optional(CONF_RX_BUFFER_SIZE, default=1000): cv.validate_bytes,
-    cv.Optional(CONF_STOP_BITS, default=1): cv.one_of(1, 2, int=True),
-    cv.Optional(CONF_PARITY, default="NONE"): cv.enum(
-        uart.UART_PARITY_OPTIONS, upper=True
-    ),
-    cv.Optional(CONF_DATA_BITS, default=8): cv.int_range(min=7, max=8),
-    OptionalForIDF5(
-                CONF_RMT_TX_SYMBOLS,
-                esp32_idf=192,
-                esp32_s2_idf=192,
-                esp32_s3_idf=192,
-                esp32_c3_idf=96,
-                esp32_c6_idf=96,
-                esp32_h2_idf=96,
-            ): cv.All(only_with_new_rmt_driver, cv.int_range(min=2)),
-    OptionalForIDF5(
-                CONF_RMT_RX_SYMBOLS,
-                esp32_idf=192,
-                esp32_s2_idf=192,
-                esp32_s3_idf=192,
-                esp32_c3_idf=96,
-                esp32_c6_idf=96,
-                esp32_h2_idf=96,
-            ): cv.All(only_with_new_rmt_driver, cv.int_range(min=2)),
-}).extend(cv.COMPONENT_SCHEMA)
+CONFIG_SCHEMA = cv.All( cv.Schema({
+        cv.GenerateID(CONF_ID): cv.declare_id(RMTUARTComponent),
+        cv.Required(CONF_TX_PIN): pins.internal_gpio_output_pin_number,
+        cv.Required(CONF_RX_PIN): pins.internal_gpio_output_pin_number,
+        cv.Optional(CONF_BAUD_RATE, default=9600): cv.positive_int,  # Default to 9600 baud
+        cv.Optional(CONF_RMT_TX_CHANNEL): cv.All(
+            not_with_new_rmt_driver, esp32_rmt.validate_rmt_channel(tx=True)
+        ),
+        cv.Optional(CONF_RMT_RX_CHANNEL): cv.All(
+            not_with_new_rmt_driver, esp32_rmt.validate_rmt_channel(tx=False)
+        ),
+        cv.Optional(CONF_RX_BUFFER_SIZE, default=1000): cv.validate_bytes,
+        cv.Optional(CONF_STOP_BITS, default=1): cv.one_of(1, 2, int=True),
+        cv.Optional(CONF_PARITY, default="NONE"): cv.enum(
+            uart.UART_PARITY_OPTIONS, upper=True
+        ),
+        cv.Optional(CONF_DATA_BITS, default=8): cv.int_range(min=7, max=8),
+        OptionalForIDF5(
+                    CONF_RMT_TX_SYMBOLS,
+                    esp32_idf=192,
+                    esp32_s2_idf=192,
+                    esp32_s3_idf=192,
+                    esp32_c3_idf=96,
+                    esp32_c6_idf=96,
+                    esp32_h2_idf=96,
+                ): cv.All(only_with_new_rmt_driver, cv.int_range(min=2)),
+        OptionalForIDF5(
+                    CONF_RMT_RX_SYMBOLS,
+                    esp32_idf=192,
+                    esp32_s2_idf=192,
+                    esp32_s3_idf=192,
+                    esp32_c3_idf=96,
+                    esp32_c6_idf=96,
+                    esp32_h2_idf=96,
+                ): cv.All(only_with_new_rmt_driver, cv.int_range(min=2)),
+    }).extend(cv.COMPONENT_SCHEMA),
+    cv.only_on([PLATFORM_ESP32]),
+)
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
