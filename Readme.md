@@ -83,6 +83,7 @@ Todo list:
 - [ ] check function if max symbols are reached.
 - [ ] test if you can import it in you esphome yaml
 - [ ] Test Baud rate lower than 9600
+- [ ] only tested with esphome version 2024.2.0, test with more versions
 
 # Examples
 add this to your esphome yaml file at the top
