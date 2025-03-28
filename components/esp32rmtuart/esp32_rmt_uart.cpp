@@ -340,12 +340,12 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
 
     for (int i = 0; i < count_half; i++) {
         if(total_recived_bits == 0 && (half_symbols[i].level0 != 0)) {
-            ESP_LOGD(TAG, "Start bit not found");
+            ESP_LOGD(TAG, "Start bit not found pin %d", this->rx_pin_);
             continue;
         } 
 
         if(total_recived_bits == 0 && (half_symbols[i].duration0 < min_time_bit) ){
-            ESP_LOGD(TAG, "Start bit not found");
+            ESP_LOGD(TAG, "Start bit not found pin %d", this->rx_pin_);
             continue;
         }
 
