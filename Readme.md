@@ -85,6 +85,15 @@ Todo list:
 - [ ] Test Baud rate lower than 9600
 
 # Examples
+add this to your esphome yaml file at the top
+```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/DJJo14/esp32_rmt_uart
+      ref: master
+    components: [ esp32rmtuart ]
+```
 
 ## uart echo
 A uart test can you find in [esp32_rmt_uart_test.yaml](esp32_rmt_uart_test.yaml) you need to add the [base_example.yaml](base_example.yaml)
