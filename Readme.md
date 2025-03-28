@@ -16,10 +16,38 @@ The ESP32 (original, look at the esphome infrared receiver for more info) has a 
 Sinds you send and recive data per bit, you need 5 symbols for 1 byte. 1 start bit, 8 data bits, 1 stop bit. But keep in mind that if you add parity, you need 1 extra symbol.(or 7E1 is 10 bit again)
 But there are more limitations the minimal symbols that you can use per channel is 64.
 
-If the data is perditional, you can use less symbols. (Currently only for the rx part, see TODO list) For example if you recive a lot of 0's (bits) you can use 1 symbol, sinds the level does not change and only the during takes longer.
+If the data is predictable, you can use less symbols. (Currently only for the rx part, see TODO list) For example if you receive a lot of 0's (bits) you can use 1 symbol, since the level does not change and only the duration takes longer.
 
-This is why this is perfect for modbus, because you know (for the most part) what you are going to recive. If you request a holding register, you know that you are going to recive 2 bytes per holding register (+ adress + count + crc (1+1+2bytes)). And if you only send to modbus adress 0x01, you know that you are going to recive the same byte back. So for the adress part it uses (1 (startbit) + 1 (adress high) + 1 (adress low) + 1 (stop bit))/2 = 2 symbols. 
+This is why this is perfect for modbus, because you know (for the most part) what you are going to receive. If you request a holding register, you know that you are going to recive 2 bytes per holding register (+ adress + count + crc (1+1+2bytes)). And if you only send to modbus adress 0x01, you know that you are going to recive the same 0x01 byte back. So for the adress part it uses (1 (startbit) + 1 (adress high) + 1 (adress low) + 1 (stop bit))/2 = 2 symbols. 
 But if you addres is 0x55 (binary 01010101) you need all 10/2 = 5 symbols. (always keep the 5 symbols in mind for the unknown data)
+
+Here's an example of how the symbols work:
+
+```wavedrom
+{signal: [
+    {name: 'bits', wave: 'x2434343432x', data: ['start', '1', '2', '3', '4', '5', '6', '7', '8', 'stop'], period: 1},
+    {name: 'Data 0x55', wave: '1.0.1.0.1.0.1.0.1.0.1...', period: 0.5},
+    {name: 'half symbols', wave: 'x2434343432x', data: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], period: 1},
+],
+ head: {
+     text: 'Symbols used Reciving 0x55 10/2=5 symbols',
+ }
+}
+```
+
+When sending address 0x01, fewer symbols are needed because the bit pattern is simpler:
+
+```wavedrom
+{signal: [
+    {name: 'bits', wave: 'x2434343432x', data: ['start', '1', '2', '3', '4', '5', '6', '7', '8', 'stop'], period: 1},
+    {name: 'Data 0x01', wave: '1.0.1.0.............1...', period: 0.5},
+    {name: 'half symbols', wave: 'x243......2x', data: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], period: 1},
+],
+ head: {
+     text: 'Symbols used Reciving 0x01 4/2=2 symbols',
+ }
+}
+```
 
 The newer esp32's have dma on this periferal, so there is not the same limit as the older/clasic esp32's.(limit in dma channels?) But i did not tested this yet, i even got the hardware yet.
 
@@ -27,7 +55,7 @@ The newer esp32's have dma on this periferal, so there is not the same limit as 
 
 # Finding so far
 I tested a lot op baud rates, and my pc recived them perfectly a usb to uart reciver.
-A test with 2 modbus client is working with the esp32_rmt_uart!! with a interval from 5 sec and 12 holding registers per uart. It is almost the same as the normal uart!
+A test with 2 modbus client is working with the esp32_rmt_uart!! with a interval from 0.5 sec and 12 holding registers per uart. and it workd good. It is almost the same as the normal uart!
 
 There are still some small bugs and features, but i am working on it.
 Currently i used a lot of code from the weikai uart and the remote_receiver and the esp32_rmt_led_strip with already using the rmt perriferal.
