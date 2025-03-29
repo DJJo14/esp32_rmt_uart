@@ -132,6 +132,9 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
   /// we wait until all bytes are gone with a timeout of 100 ms
   void flush() override;
 
+  
+  void dump_config() override;
+
   void check_logger_conflict() override;
 
   void generate_baud_rate_timing_array();

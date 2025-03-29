@@ -65,15 +65,15 @@ Todo list:
 - [ ] psudo ram?
 - [ ] DMA?
 - [ ] make it work for not ESP_IDF_VERSION_MAJOR >= 5?
-- [X] test with multiple uarts at the same time
+- [x] test with multiple uarts at the same time
 - [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol, with requesting data with modbus, you can use a lot less symbols)
 - [x] check if this works with modbus or other components
-- [ ] create a correct flush function, the rs485 transceiver enable with also not work nou. 
+- [x] create a correct flush function, the rs485 transceiver enable with also not work nou. 
 - [ ] check function if max symbols are reached. Currently it will not startup when using to mutch symbols
-- [X] test if you can import it in you esphome yaml
-- [X] Test Baud rate lower than 9600
+- [x] test if you can import it in you esphome yaml
+- [x] Test Baud rate lower than 9600
 - [ ] only tested with esphome version 2024.2.0, test with more versions
-- [ ] create a dumpconfig
+- [x] create a dumpconfig
 
 # Examples
 add this to your esphome yaml file at the top

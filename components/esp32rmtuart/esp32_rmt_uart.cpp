@@ -71,6 +71,21 @@ void RMTUARTComponent::load_settings() {
     }
 }
 
+void RMTUARTComponent::dump_config() {
+    ESP_LOGCONFIG(TAG, "  TX Pin: %d", this->tx_pin_);
+    ESP_LOGCONFIG(TAG, "  TX Channel: %d", this->tx_channel_);
+    ESP_LOGCONFIG(TAG, "  TX Symbols: %d symbols", this->rmt_tx_symbols_);
+    ESP_LOGCONFIG(TAG, "  TX Pin: %d", this->rx_pin_);
+    ESP_LOGCONFIG(TAG, "  RX Buffer Size: %u", this->rx_buffer_size_);
+    ESP_LOGCONFIG(TAG, "  RX Channel: %d", this->rx_channel_);
+    ESP_LOGCONFIG(TAG, "  RX Symbols: %d symbols", this->rmt_rx_symbols_);
+    ESP_LOGCONFIG(TAG, "  Baud Rate: %" PRIu32 " baud", this->baud_rate_);
+    ESP_LOGCONFIG(TAG, "  Data Bits: %u", this->data_bits_);
+    ESP_LOGCONFIG(TAG, "  Parity: %s", LOG_STR_ARG(parity_to_str(this->parity_)));
+    ESP_LOGCONFIG(TAG, "  Stop bits: %u", this->stop_bits_);
+    this->check_logger_conflict();
+  }
+
 void RMTUARTComponent::setup() {
     ESP_LOGCONFIG(TAG, "Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
 
