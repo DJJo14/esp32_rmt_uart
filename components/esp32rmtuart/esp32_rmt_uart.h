@@ -171,6 +171,7 @@ class RMTUARTComponent : public Component, public uart::UARTComponent {
     void put_rx_byte(uint8_t byte);
     void decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count);
     uint16_t baud_rate_timing_array_[10];
+    bool tx_is_sending_{false};
 };
 
 

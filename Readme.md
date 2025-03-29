@@ -4,13 +4,13 @@
 
 Bam i just created 4 extra uarts on the esp32 for esphome.... 
 
-It started as a prove of concept, but it is working now. I needed it for reading of energy meter of different venders, where the baud rate and other settings could not be set to be compatible with each other. but i think there are a lot of other users that are wanting this, so i putting it out there.  For this uart i used the RMT peripheral.
+It started as a prove of concept, but it is working now. I needed it for reading of energy meter of different venders, where the baud rate and other settings could not be set to be compatible with each other. but i think there are a lot of other users that are wanting this, so i putting it out there.  For this uart i used the [RMT peripheral](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/rmt.html).
 
 The RMT peripheral is meant to be used for receiving and sending ir and rf signals. It is already used in esphome for the IR remote and the led strip.
 I used the RMT peripheral to send and recive uart signals, because it is non blocking even in the recive part.
 This looks perfect but there is a but...
 
-## limitations
+## Limitations
 
 This uart is meant to be used in combination with modbus, because the number of bytes that are send and recive are limited.
 The RMT peripheral uses symbols. In a symbol you can set the level of the signal and the duration of the signal. To make it more complicated in one symbol you can set 2 levels and 2 durations.
@@ -73,6 +73,7 @@ Todo list:
 - [X] test if you can import it in you esphome yaml
 - [X] Test Baud rate lower than 9600
 - [ ] only tested with esphome version 2024.2.0, test with more versions
+- [ ] create a dumpconfig
 
 # Examples
 add this to your esphome yaml file at the top

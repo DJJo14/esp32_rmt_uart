@@ -25,7 +25,7 @@ static const uint32_t RMT_CLK_DIV = 1;
 #define CLOCK_HZ (RMT_CLK_FREQ/RMT_CLK_DIV)
 
 #if ESP_IDF_VERSION_MAJOR >= 5
-static bool IRAM_ATTR HOT rmt_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *event, void *arg) {
+static bool IRAM_ATTR HOT rmt_rx_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *event, void *arg) {
     ReceiverComponentStore *store = (ReceiverComponentStore *) arg;
   rmt_rx_done_event_data_t *event_buffer = (rmt_rx_done_event_data_t *) (store->buffer + store->buffer_write);
   uint32_t event_size = sizeof(rmt_rx_done_event_data_t);
@@ -46,6 +46,12 @@ static bool IRAM_ATTR HOT rmt_callback(rmt_channel_handle_t channel, const rmt_r
   event_buffer->received_symbols = event->received_symbols;
   store->buffer_write = next_write;
   return false;
+}
+
+static bool IRAM_ATTR HOT rmt_tx_callback(rmt_channel_handle_t tx_chan, const rmt_tx_done_event_data_t *edata, void *user_ctx) {
+    bool *ptr_tx_done = (bool *) user_ctx;
+    *ptr_tx_done = false;
+    return false;
 }
 #endif
 
@@ -106,6 +112,18 @@ void RMTUARTComponent::setup() {
       return;
     }
 
+    //register tx callback
+    rmt_tx_event_callbacks_t tx_callbacks;
+    memset(&tx_callbacks, 0, sizeof(tx_callbacks));
+    tx_callbacks.on_trans_done = rmt_tx_callback;
+    esp_err_t error = rmt_tx_register_event_callbacks(this->tx_channel_, &tx_callbacks, &tx_is_sending_);
+    if (error != ESP_OK) {
+        this->error_code_ = error;
+        this->error_string_ = "in rmt_tx_register_event_callbacks";
+        this->mark_failed();
+        return;
+    }
+
 
     //we need to send a start bit, for the end of transmission level to be correct
     rmt_symbol_word_t *symbols = this->rmt_tx_buf_;
@@ -119,7 +137,8 @@ void RMTUARTComponent::setup() {
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
     config.flags.eot_level = 1;
-    esp_err_t error = rmt_transmit(this->tx_channel_, this->encoder_, symbols, 1 * sizeof(rmt_symbol_word_t), &config);
+    tx_is_sending_ = true;
+    error = rmt_transmit(this->tx_channel_, this->encoder_, symbols, 1 * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
     {
@@ -171,7 +190,7 @@ void RMTUARTComponent::setup() {
 
     rmt_rx_event_callbacks_t callbacks;
     memset(&callbacks, 0, sizeof(callbacks));
-    callbacks.on_recv_done = rmt_callback;
+    callbacks.on_recv_done = rmt_rx_callback;
     error = rmt_rx_register_event_callbacks(this->rx_channel_, &callbacks, &this->store_);
     if (error != ESP_OK) {
         this->error_code_ = error;
@@ -262,6 +281,10 @@ void RMTUARTComponent::process_tx_queue() {
         ESP_LOGE(TAG, "RMT TX buffer is null");
         return;
     }
+
+    if (tx_is_sending_) {
+        return;
+    }
     uint8_t rmt_bits_per_send_bytes = 1 /*start bit */ + this->data_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0) + 1 /*stop bit always 1 sinds we make the time longer*/;
 
     if (rmt_tx_symbols_ <= (length * rmt_bits_per_send_bytes)/2 ) {
@@ -306,6 +329,7 @@ void RMTUARTComponent::process_tx_queue() {
     memset(&config, 0, sizeof(config));
     config.loop_count = 0;
     config.flags.eot_level = 1;
+    tx_is_sending_ = true;
     error = rmt_transmit(this->tx_channel_, this->encoder_, half_symbols, rmt_symbols_to_send * sizeof(rmt_symbol_word_t), &config);
 
     if (error != ESP_OK)
@@ -425,6 +449,12 @@ int RMTUARTComponent::available() {
 void RMTUARTComponent::flush() {
     while (tx_head_ != tx_tail_) {
         process_tx_queue();
+        delay(1);
+    }
+
+    // Wait for all bytes to be sent
+    while(tx_is_sending_) {
+        delay(1);
     }
 }
 
@@ -434,7 +464,7 @@ void RMTUARTComponent::loop()
     if (this->store_.error != ESP_OK) {
         ESP_LOGE(TAG, "Receive error");
         this->error_code_ = this->store_.error;
-        this->error_string_ = "in rmt_callback";
+        this->error_string_ = "in rmt_rx_callback";
         this->mark_failed();
     }
     if (this->store_.overflow) {
