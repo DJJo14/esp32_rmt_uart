@@ -1,9 +1,12 @@
 # ESP32 RMT uart
+> [!NOTE]  
+> **This is for the advanced users and is still considered to be experimental. Use this only when you are out of uarts and you can not easly add a [WeiKai SPI/I²C UART/IO Expander](https://esphome.io/components/weikai)**
 
-Bam i just created 4 extra uarts on the esp32....
-It started as a prove of concept, but it is working now. I needed it for reading of energy meter of different venders, where the baud rate and other settings could not be set to be compatible with each other. For this uart i used the RMT perriferal.
+Bam i just created 4 extra uarts on the esp32 for esphome.... 
 
-the RMT perriferal is meant to be used for receiving and sending ir and rf signals. It is already used in esphome for the IR remote and the led strip.
+It started as a prove of concept, but it is working now. I needed it for reading of energy meter of different venders, where the baud rate and other settings could not be set to be compatible with each other. but i think there are a lot of other users that are wanting this, so i putting it out there.  For this uart i used the RMT perriferal.
+
+The RMT perriferal is meant to be used for receiving and sending ir and rf signals. It is already used in esphome for the IR remote and the led strip.
 I used the RMT perriferal to send and recive uart signals, because it is non blocking even in the recive part.
 This looks perfect but there is a but...
 
@@ -15,6 +18,9 @@ The RMT perriferal uses symbols. In a symbol you can set the level of the signal
 The ESP32 (original, look at the esphome infrared receiver for more info) has a limit of 512 symbols. And it can be spread out over 8 channels. One channel is used for the tx and one for the rx.
 Sinds you send and recive data per bit, you need 5 symbols for 1 byte. 1 start bit, 8 data bits, 1 stop bit. But keep in mind that if you add parity, you need 1 extra symbol.(or 7E1 is 10 bit again)
 But there are more limitations the minimal symbols that you can use per channel is 64.
+
+> [!NOTE]  
+> The symbols are also shared with other modules that uses the RMT perriferal, like [esp32_rmt_led_strip](https://esphome.io/components/light/esp32_rmt_led_strip), [remote_receiver](https://esphome.io/components/remote_receiver), [remote_transmitter](https://esphome.io/components/remote_transmitter) or other ones.
 
 If the data is predictable, you can use less symbols. (Currently only for the rx part, see TODO list) For example if you receive a lot of 0's (bits) you can use 1 symbol, since the level does not change and only the duration takes longer.
 
@@ -32,7 +38,9 @@ When sending address 0x01, fewer symbols are needed because the bit pattern is s
 
 The newer esp32's have dma on this periferal, so there is not the same limit as the older/clasic esp32's.(limit in dma channels?) But i did not tested this yet, i even got the hardware yet.
 
-**If you think u can just spin up 3 (clasic) + 4 (rmt) = 7 uart, you are probably limited by some other limitation. the cpu usage or the memory usage. But i did not tested this yet. Take it to the limit and let me know**
+> [!NOTE]  
+> **If you think u can just spin up 3 (clasic) + 4 (rmt) = 7 uart, you are probably limited by some other limitation. the cpu usage or the memory usage. But i did not tested this yet. Take it to the limit and let me know**
+
 
 # Finding so far
 I tested a lot op baud rates, and my pc recived them perfectly a usb to uart reciver.
@@ -56,14 +64,14 @@ Todo list:
 - [x] parity 
 - [ ] psudo ram?
 - [ ] DMA?
- -[ ] make it work for not ESP_IDF_VERSION_MAJOR >= 5?
+- [ ] make it work for not ESP_IDF_VERSION_MAJOR >= 5?
 - [X] test with multiple uarts at the same time
 - [ ] use less symbols when sending (all bits after eath other that are the same can use the same symbol, with requesting data with modbus, you can use a lot less symbols)
 - [x] check if this works with modbus or other components
-- [ ] create a correct flush function
-- [ ] check function if max symbols are reached.
-- [ ] test if you can import it in you esphome yaml
-- [ ] Test Baud rate lower than 9600
+- [ ] create a correct flush function, the rs485 transceiver enable with also not work nou. 
+- [ ] check function if max symbols are reached. Currently it will not startup when using to mutch symbols
+- [X] test if you can import it in you esphome yaml
+- [X] Test Baud rate lower than 9600
 - [ ] only tested with esphome version 2024.2.0, test with more versions
 
 # Examples
