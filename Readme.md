@@ -4,23 +4,23 @@
 
 Bam i just created 4 extra uarts on the esp32 for esphome.... 
 
-It started as a prove of concept, but it is working now. I needed it for reading of energy meter of different venders, where the baud rate and other settings could not be set to be compatible with each other. but i think there are a lot of other users that are wanting this, so i putting it out there.  For this uart i used the RMT perriferal.
+It started as a prove of concept, but it is working now. I needed it for reading of energy meter of different venders, where the baud rate and other settings could not be set to be compatible with each other. but i think there are a lot of other users that are wanting this, so i putting it out there.  For this uart i used the RMT peripheral.
 
-The RMT perriferal is meant to be used for receiving and sending ir and rf signals. It is already used in esphome for the IR remote and the led strip.
-I used the RMT perriferal to send and recive uart signals, because it is non blocking even in the recive part.
+The RMT peripheral is meant to be used for receiving and sending ir and rf signals. It is already used in esphome for the IR remote and the led strip.
+I used the RMT peripheral to send and recive uart signals, because it is non blocking even in the recive part.
 This looks perfect but there is a but...
 
 ## limitations
 
 This uart is meant to be used in combination with modbus, because the number of bytes that are send and recive are limited.
-The RMT perriferal uses symbols. In a symbol you can set the level of the signal and the duration of the signal. To make it more complicated in one symbol you can set 2 levels and 2 durations.
+The RMT peripheral uses symbols. In a symbol you can set the level of the signal and the duration of the signal. To make it more complicated in one symbol you can set 2 levels and 2 durations.
 
 The ESP32 (original, look at the esphome infrared receiver for more info) has a limit of 512 symbols. And it can be spread out over 8 channels. One channel is used for the tx and one for the rx.
 Sinds you send and recive data per bit, you need 5 symbols for 1 byte. 1 start bit, 8 data bits, 1 stop bit. But keep in mind that if you add parity, you need 1 extra symbol.(or 7E1 is 10 bit again)
 But there are more limitations the minimal symbols that you can use per channel is 64.
 
 > [!NOTE]  
-> The symbols are also shared with other modules that uses the RMT perriferal, like [esp32_rmt_led_strip](https://esphome.io/components/light/esp32_rmt_led_strip), [remote_receiver](https://esphome.io/components/remote_receiver), [remote_transmitter](https://esphome.io/components/remote_transmitter) or other ones.
+> The symbols are also shared with other modules that uses the RMT peripheral, like [esp32_rmt_led_strip](https://esphome.io/components/light/esp32_rmt_led_strip), [remote_receiver](https://esphome.io/components/remote_receiver), [remote_transmitter](https://esphome.io/components/remote_transmitter) or other ones.
 
 If the data is predictable, you can use less symbols. (Currently only for the rx part, see TODO list) For example if you receive a lot of 0's (bits) you can use 1 symbol, since the level does not change and only the duration takes longer.
 
@@ -47,7 +47,7 @@ I tested a lot op baud rates, and my pc recived them perfectly a usb to uart rec
 A test with 2 modbus client is working with the esp32_rmt_uart!! with a interval from 0.5 sec and 12 holding registers per uart. and it workd good. It is almost the same as the normal uart!
 
 There are still some small bugs and features, but i am working on it.
-Currently i used a lot of code from the weikai uart and the remote_receiver and the esp32_rmt_led_strip with already using the rmt perriferal.
+Currently i used a lot of code from the weikai uart and the remote_receiver and the esp32_rmt_led_strip with already using the rmt peripheral.
 thats why the folders are copied from the esphome project.
 
 Feel free to help!
