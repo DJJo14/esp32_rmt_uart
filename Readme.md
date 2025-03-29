@@ -23,31 +23,12 @@ But if you addres is 0x55 (binary 01010101) you need all 10/2 = 5 symbols. (alwa
 
 Here's an example of how the symbols work:
 
-```wavedrom
-{signal: [
-    {name: 'bits', wave: 'x2434343432x', data: ['start', '1', '2', '3', '4', '5', '6', '7', '8', 'stop'], period: 1},
-    {name: 'Data 0x55', wave: '1.0.1.0.1.0.1.0.1.0.1...', period: 0.5},
-    {name: 'half symbols', wave: 'x2434343432x', data: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], period: 1},
-],
- head: {
-     text: 'Symbols used Reciving 0x55 10/2=5 symbols',
- }
-}
-```
+![Alt text](https://kroki.io/wavedrom/svg/eNqNj8sOgjAQRfd8xey6IbU86oPEnV-gS8OiSMUmvEIrQgj_bgcWRFxoJz3JbdJ77wxaZaXII7g6YM9QikJGQBJlNHHhJVpUnR8G8_idfU2FEfYD0UY0xmriIXxEgAgRHLFF7BB7hDZVTWIXatmoKo3AG92P1JM1BtZxvkR7lNHvSylZXBjlK5-HyO-g-yKp8t9b_Fv-MG3K1v1jG_2Qwqph6gBGdsamXeZ4eGqZwlnepGpVmU3bQdIbCR7b-Ee-1HRgdMY3yndmKw==)
+
 
 When sending address 0x01, fewer symbols are needed because the bit pattern is simpler:
 
-```wavedrom
-{signal: [
-    {name: 'bits', wave: 'x2434343432x', data: ['start', '1', '2', '3', '4', '5', '6', '7', '8', 'stop'], period: 1},
-    {name: 'Data 0x01', wave: '1.0.1.0.............1...', period: 0.5},
-    {name: 'half symbols', wave: 'x243......2x', data: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], period: 1},
-],
- head: {
-     text: 'Symbols used Reciving 0x01 4/2=2 symbols',
- }
-}
-```
+![Alt text](https://kroki.io/wavedrom/svg/eNqNj8kOgjAQhu88xdx6IdgW3Ei8-QR6NB6KVGzCFlsVQnh3Z-CAcHKafsk06b901mSlymO4eIDTlarQMbDEOMt8-Kg3bY2MwvHIBl9T5RR-YNapp8OdCYIkhISIsCZsCFvCjmBdVbOrD7V-miqNQfT-zPWIwsAbLiZrEfCA7u8IvGxS4cF6ofNQ-R1sWyRVvmgxCsxa_Bt-PzTly_xXtH5ohVs3ZACnG4du59EeXlancNI3bd6mzIZ2kLROQ7SSBzml9KD3-i87J2W5)
 
 The newer esp32's have dma on this periferal, so there is not the same limit as the older/clasic esp32's.(limit in dma channels?) But i did not tested this yet, i even got the hardware yet.
 
