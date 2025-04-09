@@ -83,6 +83,8 @@ void RMTUARTComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  Data Bits: %u", this->data_bits_);
     ESP_LOGCONFIG(TAG, "  Parity: %s", LOG_STR_ARG(parity_to_str(this->parity_)));
     ESP_LOGCONFIG(TAG, "  Stop bits: %u", this->stop_bits_);
+    ESP_LOGCONFIG(TAG, "  error: %s", this->error_string_.c_str());
+    ESP_LOGCONFIG(TAG, "  error code: %d", this->error_code_);
     this->check_logger_conflict();
   }
 
