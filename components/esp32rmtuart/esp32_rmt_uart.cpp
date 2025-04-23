@@ -20,7 +20,7 @@ static const uint32_t RMT_CLK_FREQ = 32000000;
 static const uint8_t RMT_CLK_DIV = 1;
 #else
 static const uint32_t RMT_CLK_FREQ = 80000000;
-static const uint32_t RMT_CLK_DIV = 1;
+static const uint32_t RMT_CLK_DIV = 2;
 #endif
 #define CLOCK_HZ (RMT_CLK_FREQ/RMT_CLK_DIV)
 
@@ -75,7 +75,7 @@ void RMTUARTComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  TX Pin: %d", this->tx_pin_);
     ESP_LOGCONFIG(TAG, "  TX Channel: %d", this->tx_channel_);
     ESP_LOGCONFIG(TAG, "  TX Symbols: %d symbols", this->rmt_tx_symbols_);
-    ESP_LOGCONFIG(TAG, "  TX Pin: %d", this->rx_pin_);
+    ESP_LOGCONFIG(TAG, "  RX Pin: %d", this->rx_pin_);
     ESP_LOGCONFIG(TAG, "  RX Buffer Size: %u", this->rx_buffer_size_);
     ESP_LOGCONFIG(TAG, "  RX Channel: %d", this->rx_channel_);
     ESP_LOGCONFIG(TAG, "  RX Symbols: %d symbols", this->rmt_rx_symbols_);
@@ -85,6 +85,8 @@ void RMTUARTComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  Stop bits: %u", this->stop_bits_);
     ESP_LOGCONFIG(TAG, "  error: %s", this->error_string_.c_str());
     ESP_LOGCONFIG(TAG, "  error code: %d", this->error_code_);
+    ESP_LOGCONFIG(TAG, "  filter min: %d", this->store_.config.signal_range_min_ns);
+    ESP_LOGCONFIG(TAG, "  filter max: %d", this->store_.config.signal_range_max_ns);
     this->check_logger_conflict();
   }
 
@@ -100,7 +102,7 @@ void RMTUARTComponent::setup() {
     rmt_tx_channel_config_t tx_channel;
     memset(&tx_channel, 0, sizeof(tx_channel));
     tx_channel.clk_src = RMT_CLK_SRC_DEFAULT;
-    tx_channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
+    tx_channel.resolution_hz = CLOCK_HZ;
     tx_channel.gpio_num = gpio_num_t(this->tx_pin_);
     tx_channel.mem_block_symbols = this->rmt_tx_symbols_;
     tx_channel.trans_queue_depth = 1;
@@ -110,7 +112,7 @@ void RMTUARTComponent::setup() {
     tx_channel.flags.with_dma = 0;
     tx_channel.intr_priority = 0;
     if (rmt_new_tx_channel(&tx_channel, &this->tx_channel_) != ESP_OK) {
-      ESP_LOGE(TAG, "Channel creation failed");
+      ESP_LOGE(TAG, "Channel tx creation failed");
       this->mark_failed();
       return;
     }
@@ -118,7 +120,7 @@ void RMTUARTComponent::setup() {
     rmt_copy_encoder_config_t encoder;
     memset(&encoder, 0, sizeof(encoder));
     if (rmt_new_copy_encoder(&encoder, &this->encoder_) != ESP_OK) {
-      ESP_LOGE(TAG, "Encoder creation failed");
+      ESP_LOGE(TAG, "Encoder tx creation failed");
       this->mark_failed();
       return;
     }
@@ -141,28 +143,6 @@ void RMTUARTComponent::setup() {
         return;
     }
 
-
-    //we need to send a start bit, for the end of transmission level to be correct
-    rmt_symbol_word_t *symbols = this->rmt_tx_buf_;
-    symbols[0].val = 0;
-    symbols[0].duration0 = (uint16_t) 1;
-    symbols[0].level0 = 1; // Start bit
-    symbols[0].duration1 = (uint16_t) 1;
-    symbols[0].level1 = 1; // Start bit
-    
-    rmt_transmit_config_t config;
-    memset(&config, 0, sizeof(config));
-    config.loop_count = 0;
-    config.flags.eot_level = 1;
-    tx_is_sending_ = true;
-    error = rmt_transmit(this->tx_channel_, this->encoder_, symbols, 1 * sizeof(rmt_symbol_word_t), &config);
-
-    if (error != ESP_OK)
-    {
-        ESP_LOGE(TAG, "RMT TX error");
-        this->status_set_warning();
-        return;
-    }
     
     // RX Configuration
 
@@ -171,7 +151,7 @@ void RMTUARTComponent::setup() {
     rmt_rx_channel_config_t rx_channel;
     memset(&rx_channel, 0, sizeof(rx_channel));
     rx_channel.clk_src = RMT_CLK_SRC_DEFAULT;
-    rx_channel.resolution_hz = RMT_CLK_FREQ / RMT_CLK_DIV;
+    rx_channel.resolution_hz = CLOCK_HZ;
     rx_channel.mem_block_symbols = this->rmt_rx_symbols_;
     rx_channel.gpio_num = gpio_num_t(this->rx_pin_);
     rx_channel.intr_priority = 0;
@@ -219,19 +199,42 @@ void RMTUARTComponent::setup() {
     
     uint32_t event_size = sizeof(rmt_rx_done_event_data_t);
     uint32_t max_filter_ns = 255u * 1000 / (RMT_CLK_FREQ / 1000000);
-    uint32_t max_idle_ns = 65535u * 1000;
+    uint32_t max_idle_ns = 65535u * (1000000000/(CLOCK_HZ));
     memset(&this->store_.config, 0, sizeof(this->store_.config));
     this->store_.config.signal_range_min_ns = std::min(((uint32_t)/* 90% of baud_rate*/9000000000u/(this->baud_rate_)), max_filter_ns);
     this->store_.config.signal_range_max_ns = std::min(1000000000u/(this->baud_rate_/10), max_idle_ns);
+    ESP_LOGE(TAG, "signal range min: %d max: %d", this->store_.config.signal_range_min_ns, this->store_.config.signal_range_max_ns);
     this->store_.receive_size = this->rmt_rx_symbols_ * sizeof(rmt_symbol_word_t);
     this->store_.buffer_size = (event_size + this->store_.receive_size) * 3;
     this->store_.buffer = new uint8_t[this->store_.buffer_size];
+    ESP_LOGE(TAG, "buffer size: %d", this->store_.buffer_size);
     error = rmt_receive(this->rx_channel_, (uint8_t *) this->store_.buffer + event_size, this->store_.receive_size,
                         &this->store_.config);
     if (error != ESP_OK) {
         this->error_code_ = error;
         this->error_string_ = "in rmt_receive";
         this->mark_failed();
+        return;
+    }
+
+    //we need to send a start bit, for the end of transmission level to be correct
+    rmt_symbol_word_t *symbols = this->rmt_tx_buf_;
+    symbols[0].val = 0;
+    symbols[0].duration0 = (uint16_t) 1;
+    symbols[0].level0 = 1; // Start bit
+    symbols[0].duration1 = (uint16_t) 1;
+    symbols[0].level1 = 1; // Start bit
+    
+    rmt_transmit_config_t config;
+    memset(&config, 0, sizeof(config));
+    config.loop_count = 0;
+    config.flags.eot_level = 1;
+    tx_is_sending_ = true;
+    error = rmt_transmit(this->tx_channel_, this->encoder_, symbols, 1 * sizeof(rmt_symbol_word_t), &config);
+    if (error != ESP_OK)
+    {
+        ESP_LOGE(TAG, "RMT TX error");
+        this->status_set_warning();
         return;
     }
 
@@ -394,7 +397,11 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
             //this is the last bit, before idle
             recived_bits = (1 + this->data_bits_ + this->stop_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0)) - total_recived_bits;
         }
-        else
+        else if (half_symbols[i].duration0 < min_time_bit)
+        {
+            recived_bits = 1;
+        }
+        else if (half_symbols[i].duration0 > min_time_bit)
         {
             recived_bits = half_symbols[i].duration0 / min_time_bit;
         }
