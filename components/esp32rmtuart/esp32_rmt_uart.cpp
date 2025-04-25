@@ -20,7 +20,7 @@ static const uint32_t RMT_CLK_FREQ = 32000000;
 static const uint8_t RMT_CLK_DIV = 1;
 #else
 static const uint32_t RMT_CLK_FREQ = 80000000;
-static const uint32_t RMT_CLK_DIV = 2;
+static const uint32_t RMT_CLK_DIV = 4;
 #endif
 #define CLOCK_HZ (RMT_CLK_FREQ/RMT_CLK_DIV)
 
@@ -65,6 +65,9 @@ void RMTUARTComponent::load_settings() {
     for (int i = 0; i < 10; i++) {
         this->baud_rate_timing_array_[i] = base_timing + ((i < rest) ? 1 : 0);
     }
+
+    // always make the stop bit longer
+    this->baud_rate_timing_array_[9] + 1;
 
     if (this->stop_bits_ == 2) {
         this->baud_rate_timing_array_[9] = this->baud_rate_timing_array_[9] * 2;
@@ -198,11 +201,12 @@ void RMTUARTComponent::setup() {
 
     
     uint32_t event_size = sizeof(rmt_rx_done_event_data_t);
-    uint32_t max_filter_ns = 255u * 1000 / (RMT_CLK_FREQ / 1000000);
-    uint32_t max_idle_ns = 65535u * (1000000000/(CLOCK_HZ));
+    uint32_t max_filter_ns = 10 * (1000000000/(CLOCK_HZ));
+    uint32_t max_idle_ns = 32768u * (1000000000/(CLOCK_HZ));
+    uint32_t bits_per_byte = 1 /*startbit*/ + this->data_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0) + this->stop_bits_;
     memset(&this->store_.config, 0, sizeof(this->store_.config));
-    this->store_.config.signal_range_min_ns = std::min(((uint32_t)/* 90% of baud_rate*/9000000000u/(this->baud_rate_)), max_filter_ns);
-    this->store_.config.signal_range_max_ns = std::min(1000000000u/(this->baud_rate_/10), max_idle_ns);
+    this->store_.config.signal_range_min_ns = std::min(((uint32_t)/* 80% of baud_rate*/8000000000u/(this->baud_rate_)), max_filter_ns);
+    this->store_.config.signal_range_max_ns = std::min(1000000000u/(this->baud_rate_/bits_per_byte), max_idle_ns);
     ESP_LOGE(TAG, "signal range min: %d max: %d", this->store_.config.signal_range_min_ns, this->store_.config.signal_range_max_ns);
     this->store_.receive_size = this->rmt_rx_symbols_ * sizeof(rmt_symbol_word_t);
     this->store_.buffer_size = (event_size + this->store_.receive_size) * 3;
@@ -373,65 +377,94 @@ void RMTUARTComponent::put_rx_byte(uint8_t byte) {
 }
 
 void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int count) {
-    uint32_t min_time_bit = this->baud_rate_timing_array_[0] * 9 / 10;
+    uint32_t min_time_bit = this->baud_rate_timing_array_[0];
+    uint32_t half_time_bit = (this->baud_rate_timing_array_[0] /2);
     uint16_t data_bytes_mask = (1 << this->data_bits_) - 1;
-    uint16_t received_byte = 0;
+    uint16_t bits_per_byte = 1 /*startbit*/ + this->data_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0) + this->stop_bits_;
+    uint32_t total_byte_duration = 0;
+    uint32_t received_byte = 0;
     uint8_t recived_bits = 0;
     uint32_t total_recived_bits = 0;
     rmt_symbol_half_word_t *half_symbols = (rmt_symbol_half_word_t *) symbols;
     uint32_t count_half = count * 2;
     bool parity_bit = false;
 
-    for (int i = 0; i < count_half; i++) {
-        if(total_recived_bits == 0 && (half_symbols[i].level0 != 0)) {
-            ESP_LOGD(TAG, "Start bit not found pin %d", this->rx_pin_);
-            continue;
-        } 
-
-        if(total_recived_bits == 0 && (half_symbols[i].duration0 < min_time_bit) ){
-            ESP_LOGD(TAG, "Start bit not found pin %d", this->rx_pin_);
-            continue;
-        }
-
-        if (half_symbols[i].duration0 == 0) {
-            //this is the last bit, before idle
-            recived_bits = (1 + this->data_bits_ + this->stop_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0)) - total_recived_bits;
-        }
-        else if (half_symbols[i].duration0 < min_time_bit)
+    for (int i = 0; i < count_half; i++)
+    {
+        if (total_recived_bits == 0 && (half_symbols[i].level0 != 0))
         {
+            ESP_LOGD(TAG, "Start bit not found pin %d", this->rx_pin_);
+            continue;
+        }
+
+        uint32_t duration = half_symbols[i].duration0;
+        recived_bits = 0;
+
+        if (half_symbols[i].duration0 == 0)
+        {
+            //this is the last bit, before idle
+            recived_bits = bits_per_byte - total_recived_bits;
+        }
+        else if (half_symbols[i].duration0 <= half_time_bit)
+        {
+            //this is the last bit, before idle
             recived_bits = 1;
         }
-        else if (half_symbols[i].duration0 > min_time_bit)
+        else
         {
-            recived_bits = half_symbols[i].duration0 / min_time_bit;
+            for (uint32_t bit_time = min_time_bit*total_recived_bits ; bit_time < (total_byte_duration + duration); bit_time += min_time_bit)
+        {
+                uint32_t mid_point = bit_time + half_time_bit;
+                if (mid_point < (total_byte_duration + duration) )
+                {
+                    recived_bits++;
         }
-        
-        // ESP_LOGD(TAG, "reviced biit: %d, time %d, bits %d total %d", half_symbols[i].level0, half_symbols[i].duration0, recived_bits, total_recived_bits);
-
-        if (half_symbols[i].level0 == 1){
-            for (uint8_t j = 0; j < recived_bits; j++) {
-                received_byte |= (1 << (j + (total_recived_bits)) );
             }
         }
 
-        total_recived_bits = total_recived_bits + recived_bits;
+        ESP_LOGD(TAG, "%d l %d, d  %d, r_bits %d, t_r_bits %d t_time %d", i, half_symbols[i].level0, duration, recived_bits, total_recived_bits, total_byte_duration);
 
-        if(total_recived_bits >= (1 + this->data_bits_ + this->stop_bits_ + (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE ? 1 : 0)) ) {
-            if (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE) {
+        uint8_t recived_bits_set = recived_bits;
+        if (recived_bits_set + total_recived_bits > bits_per_byte)
+        {
+            recived_bits_set = bits_per_byte - total_recived_bits;
+        }
+
+        if (half_symbols[i].level0 == 1) {
+            for (uint8_t j = 0; j < recived_bits_set; j++) {
+                received_byte |= (1 << (j + total_recived_bits));
+            }
+        }
+
+        total_recived_bits += recived_bits;
+        total_byte_duration += duration;
+
+        if (total_recived_bits >= bits_per_byte)
+        {
+            uint8_t data_byte = (uint8_t)((received_byte >> 1) & data_bytes_mask);
+            if (this->parity_ != esphome::uart::UART_CONFIG_PARITY_NONE)
+            {
                 parity_bit = (received_byte >> (this->data_bits_ + 1)) & 1;
-                uint8_t data_byte = (uint8_t)((received_byte >> 1) & data_bytes_mask);
                 bool calculated_parity = __builtin_parity(data_byte);
                 if ((this->parity_ == esphome::uart::UART_CONFIG_PARITY_EVEN && calculated_parity != parity_bit) ||
-                    (this->parity_ == esphome::uart::UART_CONFIG_PARITY_ODD && calculated_parity == parity_bit)) {
-                    ESP_LOGW(TAG, "Parity error detected");
-                } else {
-                    put_rx_byte(data_byte);
+                    (this->parity_ == esphome::uart::UART_CONFIG_PARITY_ODD && calculated_parity == parity_bit)) 
+                {
+                    ESP_LOGW(TAG, "Parity error detected  %02x t %03x b %d time %d", data_byte, received_byte, total_recived_bits, total_byte_duration);
                 }
-            } else {
-                put_rx_byte((uint8_t)((received_byte >> 1) & data_bytes_mask));
+                else
+                {
+                    put_rx_byte(data_byte);
+                    ESP_LOGD(TAG, "Rx byte %02x t %03x b %d time %d", data_byte, received_byte, total_recived_bits, total_byte_duration);
+                }
+            }
+            else
+            {
+                put_rx_byte(data_byte);
+                ESP_LOGD(TAG, "Rx byte %02x t %03x", data_byte, received_byte);
             }
             received_byte = 0;
             total_recived_bits = 0;
+            total_byte_duration = 0;
         }
     }
 }
