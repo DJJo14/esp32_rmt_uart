@@ -65,7 +65,7 @@ void RMTUARTComponent::load_settings() {
     for (int i = 0; i < 10; i++) {
         this->baud_rate_timing_array_[i] = base_timing + ((i < rest) ? 1 : 0);
     }
-
+    
     // always make the stop bit longer
     this->baud_rate_timing_array_[9] + 1;
 
@@ -93,7 +93,7 @@ void RMTUARTComponent::dump_config() {
     this->check_logger_conflict();
   }
 
-void RMTUARTComponent::setup() {
+  void RMTUARTComponent::setup() {
     ESP_LOGCONFIG(TAG, "Extra uarts on TX: %d, RX: %d, Baud Rate: %d", tx_pin_, rx_pin_, baud_rate_);
 
 #if ESP_IDF_VERSION_MAJOR >= 5
@@ -413,16 +413,16 @@ void RMTUARTComponent::decode_rmt_rx_data(const rmt_symbol_word_t *symbols, int 
         else
         {
             for (uint32_t bit_time = min_time_bit*total_recived_bits ; bit_time < (total_byte_duration + duration); bit_time += min_time_bit)
-        {
+            {
                 uint32_t mid_point = bit_time + half_time_bit;
                 if (mid_point < (total_byte_duration + duration) )
                 {
                     recived_bits++;
-        }
+                }
             }
         }
 
-        ESP_LOGD(TAG, "%d l %d, d  %d, r_bits %d, t_r_bits %d t_time %d", i, half_symbols[i].level0, duration, recived_bits, total_recived_bits, total_byte_duration);
+        // ESP_LOGD(TAG, "%d l %d, d  %d, r_bits %d, t_r_bits %d t_time %d", i, half_symbols[i].level0, duration, recived_bits, total_recived_bits, total_byte_duration);
 
         uint8_t recived_bits_set = recived_bits;
         if (recived_bits_set + total_recived_bits > bits_per_byte)
